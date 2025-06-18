@@ -102,8 +102,12 @@ impl Chip8 {
         self.framebuffer = [0; 64 * 32];
         self.keyboard = [0; 16];
 
-        self.load_font_at(FONT_START_ADDRESS, &FONT_SET)?;
+        self.load_font()?;
         Ok(())
+    }
+    
+    fn load_font(&mut self) -> Result<(), Chip8Error> {
+        self.load_font_at(FONT_START_ADDRESS, &FONT_SET)
     }
 
     fn load_font_at(&mut self, start_address: usize, font: &[u8]) -> Result<(), Chip8Error> {
