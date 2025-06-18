@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 /// Standard CHIP-8 font set (hex digits 0-F)
 /// Each digit is 5 bytes representing a 8x5 pixel sprite
 const FONT_SET: [u8; 80] = [
@@ -61,21 +59,11 @@ pub struct Chip8 {
     keyboard: [u8; 16],
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Chip8Error {
-    LoadFontSetError(&'static str),
+    #[error("Font-set is out of bounds")]
+    LoadFontSetError,
 }
-
-impl Display for Chip8Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let message = match self {
-            Chip8Error::LoadFontSetError(e) => {format!("Load font set error: {:?}", e)}
-        };
-        write!(f, "Chip8 Error: {}", message)
-    }
-}
-
-impl std::error::Error for Chip8Error {}
 
 impl Chip8 {
     /// Create a new Chip8 instance
@@ -113,17 +101,20 @@ impl Chip8 {
         self.st = 0;
         self.framebuffer = [0; 64 * 32];
         self.keyboard = [0; 16];
-        
+
         self.load_font_at(FONT_START_ADDRESS, &FONT_SET)?;
         Ok(())
     }
 
     fn load_font_at(&mut self, start_address: usize, font: &[u8]) -> Result<(), Chip8Error> {
-        if let Some(memory) = self.memory.get_mut(start_address..start_address + font.len()) {
+        if let Some(memory) = self
+            .memory
+            .get_mut(start_address..start_address + font.len())
+        {
             memory.clone_from_slice(font);
             Ok(())
-        }else{
-            Err(Chip8Error::LoadFontSetError("font set is out of bounds"))
+        } else {
+            Err(Chip8Error::LoadFontSetError)
         }
     }
 }
