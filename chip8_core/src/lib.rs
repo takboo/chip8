@@ -22,6 +22,13 @@ const FONT_SET: [u8; 80] = [
 /// Memory address where font sprites are loaded
 const FONT_START_ADDRESS: usize = 0x50;
 
+/// Memory address where rom are loaded
+const ROM_START_ADDRESS: usize = 0x200;
+
+/// Represents the CHIP-8 virtual machine.
+///
+/// This struct holds the entire state of a CHIP-8 system, including memory, registers,
+/// timers, and I/O devices like the screen buffer and keyboard state.
 pub struct Chip8 {
     /// Memory of the Chip8
     memory: [u8; 4096],
@@ -59,19 +66,29 @@ pub struct Chip8 {
     keyboard: [u8; 16],
 }
 
+/// Defines the possible errors that can occur during CHIP-8 emulation.
 #[derive(Debug, thiserror::Error)]
 pub enum Chip8Error {
+    /// Occurs when the font set cannot be loaded into memory because it would exceed the memory bounds.
     #[error("Font-set is out of bounds")]
     LoadFontSetError,
+    /// Occurs when a ROM cannot be loaded because it is too large to fit in the available memory space.
+    #[error("ROM is out of bounds")]
+    LoadRomError,
 }
 
 impl Chip8 {
-    /// Create a new Chip8 instance
+    /// Creates and initializes a new CHIP-8 virtual machine.
     ///
-    /// Initializes the Chip8 instance with default values.
-    /// Most Chip-8 programs start at location 0x200 (512), but some begin at 0x600 (1536). Programs beginning at 0x600 are intended for the ETI 660 computer.
-    /// rom location 0x000 (0) to 0xFFF (4095).
-    /// The first 512 bytes, from 0x000 to 0x1FF, are where the original interpreter was located, and should not be used by programs.
+    /// This function sets up the initial state of the emulator:
+    /// - It clears memory, registers, and the stack.
+    /// - It sets the program counter (`pc`) to `0x200`, the standard starting address for CHIP-8 programs.
+    /// - It loads the built-in font set into memory starting at `0x50`.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Chip8)` with a new, ready-to-use `Chip8` instance.
+    /// * `Err(Chip8Error::LoadFontSetError)` if the font set cannot be loaded, which is an unlikely internal error.
     pub fn new() -> Result<Self, Chip8Error> {
         let mut chip8 = Self {
             memory: [0; 4096],
@@ -89,7 +106,16 @@ impl Chip8 {
         Ok(chip8)
     }
 
-    /// Reset the Chip8 instance
+    /// Resets the CHIP-8 virtual machine to its initial state.
+    ///
+    /// This is equivalent to turning the machine off and on again. It clears all registers,
+    /// memory (except for the font set), the stack, and I/O devices. The program counter
+    /// is reset to `0x200`. The font set is reloaded into its standard memory location.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` on successful reset.
+    /// * `Err(Chip8Error::LoadFontSetError)` if reloading the font fails, which is an unlikely internal error.
     pub fn reset(&mut self) -> Result<(), Chip8Error> {
         self.memory = [0; 4096];
         self.registers = [0; 16];
@@ -105,20 +131,48 @@ impl Chip8 {
         self.load_font()?;
         Ok(())
     }
-    
+
+    /// Loads a CHIP-8 program (ROM) into memory.
+    ///
+    /// The provided ROM data is copied into the CHIP-8 memory, starting at the
+    /// standard program address `0x200`.
+    ///
+    /// # Arguments
+    ///
+    /// * `rom`: A byte slice representing the program's binary data.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the ROM was successfully loaded.
+    /// * `Err(Chip8Error::LoadRomError)` if the ROM is too large to fit in the memory
+    ///   from the starting address `0x200` to the end of memory.
+    pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), Chip8Error> {
+        self.load_slice_at(ROM_START_ADDRESS, rom)
+            .map_err(|_| Chip8Error::LoadRomError)
+    }
+
+    /// Loads the built-in font set into memory at the default address.
     fn load_font(&mut self) -> Result<(), Chip8Error> {
         self.load_font_at(FONT_START_ADDRESS, &FONT_SET)
     }
 
+    /// Loads the built-in font set into memory at a specific address.
     fn load_font_at(&mut self, start_address: usize, font: &[u8]) -> Result<(), Chip8Error> {
+        self.load_slice_at(start_address, font)
+            .map_err(|_| Chip8Error::LoadFontSetError)
+    }
+
+    /// A helper function to copy a slice of data into memory at a specific address.
+    /// Returns a generic error on failure to be mapped by the caller.
+    fn load_slice_at(&mut self, start_address: usize, data: &[u8]) -> Result<(), ()> {
         if let Some(memory) = self
             .memory
-            .get_mut(start_address..start_address + font.len())
+            .get_mut(start_address..start_address + data.len())
         {
-            memory.clone_from_slice(font);
+            memory.clone_from_slice(data);
             Ok(())
         } else {
-            Err(Chip8Error::LoadFontSetError)
+            Err(())
         }
     }
 }
@@ -214,5 +268,27 @@ mod tests {
         assert_eq!(font_in_memory, FONT_SET);
         // Verify other memory was reset
         assert_eq!(chip8.memory[FONT_START_ADDRESS + FONT_SET.len()], 0);
+    }
+
+    #[test]
+    fn test_load_rom() {
+        let mut chip8 = Chip8::new().unwrap();
+        let rom_data = vec![0x1, 0x2, 0x3, 0x4];
+        chip8.load_rom(&rom_data).unwrap();
+
+        let memory_slice = &chip8.memory[ROM_START_ADDRESS..ROM_START_ADDRESS + rom_data.len()];
+        assert_eq!(memory_slice, rom_data.as_slice());
+    }
+
+    #[test]
+    fn test_load_rom_out_of_bounds() {
+        let mut chip8 = Chip8::new().unwrap();
+        let rom_size = chip8.memory.len() - ROM_START_ADDRESS + 1;
+        let rom_data = vec![0u8; rom_size];
+
+        assert!(matches!(
+            chip8.load_rom(&rom_data),
+            Err(Chip8Error::LoadRomError)
+        ));
     }
 }
