@@ -25,6 +25,75 @@ const FONT_START_ADDRESS: usize = 0x50;
 /// Memory address where rom are loaded
 const ROM_START_ADDRESS: usize = 0x200;
 
+/// Decoded representation of a single 16-bit CHIP-8 instruction.
+///
+/// This struct breaks down an opcode into its constituent parts (e.g., `instr`, `x`, `y`, `n`, `nn`, `nnn`)
+/// for easier processing during the execution phase.
+struct Instructions {
+    /// The primary 4-bit instruction identifier.
+    instr: u8,
+    /// A 4-bit value, often used as a register index.
+    x: usize,
+    /// A 4-bit value, often used as a register index.
+    y: usize,
+    /// A 4-bit value, often used for small constants.
+    n: u8,
+    /// An 8-bit value, often used for immediate values.
+    nn: u8,
+    /// A 12-bit value, typically representing a memory address.
+    nnn: u16,
+}
+
+impl Instructions {
+    /// Creates a new `Instructions` instance by decoding a 16-bit opcode.
+    fn new(instruction: u16) -> Self {
+        let instr = ((instruction & 0xF000) >> 12) as u8;
+        let x = ((instruction & 0x0F00) >> 8) as usize;
+        let y = ((instruction & 0x00F0) >> 4) as usize;
+        let n = (instruction & 0x000F) as u8;
+        let nn = (instruction & 0x00FF) as u8;
+        let nnn = instruction & 0x0FFF;
+
+        Self {
+            instr,
+            x,
+            y,
+            n,
+            nn,
+            nnn,
+        }
+    }
+
+    /// Returns the primary 4-bit instruction identifier.
+    pub fn instruction(&self) -> u8 {
+        self.instr
+    }
+
+    /// Returns the `x` component of the instruction (a 4-bit register index).
+    pub fn x(&self) -> usize {
+        self.x
+    }
+    /// Returns the `y` component of the instruction (a 4-bit register index).
+    pub fn y(&self) -> usize {
+        self.y
+    }
+
+    /// Returns the `n` component of the instruction (a 4-bit value).
+    pub fn n(&self) -> u8 {
+        self.n
+    }
+
+    /// Returns the `nn` component of the instruction (an 8-bit value).
+    pub fn nn(&self) -> u8 {
+        self.nn
+    }
+
+    /// Returns the `nnn` component of the instruction (a 12-bit address).
+    pub fn nnn(&self) -> u16 {
+        self.nnn
+    }
+}
+
 /// Represents the CHIP-8 virtual machine.
 ///
 /// This struct holds the entire state of a CHIP-8 system, including memory, registers,
@@ -75,6 +144,9 @@ pub enum Chip8Error {
     /// Occurs when a ROM cannot be loaded because it is too large to fit in the available memory space.
     #[error("ROM is out of bounds")]
     LoadRomError,
+    /// Occurs when the program counter (`pc`) points to an invalid memory location for an instruction fetch.
+    #[error("PC points to an invalid memory")]
+    PCError,
 }
 
 impl Chip8 {
@@ -149,6 +221,24 @@ impl Chip8 {
     pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), Chip8Error> {
         self.load_slice_at(ROM_START_ADDRESS, rom)
             .map_err(|_| Chip8Error::LoadRomError)
+    }
+
+    /// Fetches the next instruction from memory at the current program counter (`pc`),
+    /// decodes it, and advances the `pc` by two bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Instructions)` containing the decoded instruction.
+    /// * `Err(Chip8Error::PCError)` if the `pc` is at or near the end of memory,
+    ///   making it impossible to fetch a full 2-byte instruction.
+    fn fetch(&mut self) -> Result<Instructions, Chip8Error> {
+        if let Some(instruction_bytes) = self.memory.get(self.pc as usize..self.pc as usize + 2) {
+            self.pc += 2;
+            let instruction = (instruction_bytes[0] as u16) << 8 | instruction_bytes[1] as u16;
+            Ok(Instructions::new(instruction))
+        } else {
+            Err(Chip8Error::PCError)
+        }
     }
 
     /// Loads the built-in font set into memory at the default address.
@@ -290,5 +380,52 @@ mod tests {
             chip8.load_rom(&rom_data),
             Err(Chip8Error::LoadRomError)
         ));
+    }
+
+    #[test]
+    fn test_instructions_decoding() {
+        let instruction = 0xABCD;
+        let decoded = Instructions::new(instruction);
+        assert_eq!(decoded.instruction(), 0xA);
+        assert_eq!(decoded.x(), 0xB);
+        assert_eq!(decoded.y(), 0xC);
+        assert_eq!(decoded.n(), 0xD);
+        assert_eq!(decoded.nn(), 0xCD);
+        assert_eq!(decoded.nnn(), 0xBCD);
+    }
+
+    #[test]
+    fn test_fetch_success() {
+        let mut chip8 = Chip8::new().unwrap();
+        // Load an instruction 0x1234 at the start of ROM space
+        chip8.memory[ROM_START_ADDRESS] = 0x12;
+        chip8.memory[ROM_START_ADDRESS + 1] = 0x34;
+
+        let initial_pc = chip8.pc;
+        let instructions = chip8.fetch().unwrap();
+
+        assert_eq!(instructions.instruction(), 0x1);
+        assert_eq!(instructions.x(), 0x2);
+        assert_eq!(instructions.y(), 0x3);
+        assert_eq!(instructions.n(), 0x4);
+        assert_eq!(instructions.nn(), 0x34);
+        assert_eq!(instructions.nnn(), 0x234);
+
+        // PC should advance by 2 bytes
+        assert_eq!(chip8.pc, initial_pc + 2);
+    }
+
+    #[test]
+    fn test_fetch_out_of_bounds() {
+        let mut chip8 = Chip8::new().unwrap();
+        // Set PC to the last byte of memory, where a 2-byte instruction cannot be read
+        chip8.pc = (chip8.memory.len() - 1) as u16;
+        let initial_pc = chip8.pc;
+
+        let result = chip8.fetch();
+        assert!(matches!(result, Err(Chip8Error::PCError)));
+
+        // PC should not advance on failure
+        assert_eq!(chip8.pc, initial_pc);
     }
 }
