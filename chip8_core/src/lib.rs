@@ -1,5 +1,7 @@
+use rand::Rng;
+
 /// Standard CHIP-8 font set (hex digits 0-F)
-/// Each digit is 5 bytes representing a 8x5 pixel sprite
+/// Each digit is 5 bytes representing an 8x5 pixel sprite
 const FONT_SET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -145,8 +147,20 @@ pub enum Chip8Error {
     #[error("ROM is out of bounds")]
     LoadRomError,
     /// Occurs when the program counter (`pc`) points to an invalid memory location for an instruction fetch.
-    #[error("PC points to an invalid memory")]
-    PCError,
+    #[error("PC points to an invalid memory: {0}")]
+    PCError(u16),
+    #[error("Invalid opcode")]
+    InvalidOpCode,
+    #[error("SP {0} is out of bounds")]
+    SPError(u8),
+    #[error("SP {0} is overflow")]
+    SPOverflow(u8),
+    #[error("Index register points to an invalid memory: {0}")]
+    IndexError(u16),
+    #[error("Invalid register: V{0}")]
+    InvalidRegister(usize),
+    #[error("Invalid key: {0}")]
+    InvalidKey(u8),
 }
 
 impl Chip8 {
@@ -223,6 +237,408 @@ impl Chip8 {
             .map_err(|_| Chip8Error::LoadRomError)
     }
 
+    pub fn run(&mut self) -> Result<(), Chip8Error> {
+        let instruction = self.fetch()?;
+        let (instr, x, y, n) = (
+            instruction.instruction(),
+            instruction.x(),
+            instruction.y(),
+            instruction.n(),
+        );
+        let nn = instruction.nn();
+        let nnn = instruction.nnn();
+
+        match (instr, x, y, n) {
+            (0, 0, 0xE, 0) => {
+                dbg!("clear screen");
+                Ok(())
+            }
+            (1, _, _, _) => {
+                self.pc = nnn;
+                dbg!("jump to nnn");
+                Ok(())
+            }
+            (2, _, _, _) => {
+                self.push_stack()?;
+                self.pc = nnn;
+                dbg!("call a subroutine, should push pc to stack");
+                Ok(())
+            }
+            (0, 0, 0xE, 0xE) => {
+                self.pop_stack()?;
+                dbg!("return, pop pc from stack");
+                Ok(())
+            }
+            (3, _, _, _) => {
+                // read Vx register
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                if vx == nn {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("condition check vx equal nn");
+                Ok(())
+            }
+            (4, _, _, _) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                if vx != nn {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("condition check vx not equal nn");
+                Ok(())
+            }
+            (5, _, _, _) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                if vx == vy {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("condition check vy equal vx");
+                Ok(())
+            }
+            (9, _, _, _) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                if vx != vy {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("condition check vy not equal vx");
+                Ok(())
+            }
+            (6, _, _, _) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx = nn;
+                dbg!("set vx to nn");
+                Ok(())
+            }
+            (7, _, _, _) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx = vx.wrapping_add(nn);
+                dbg!("add nn to vx");
+                Ok(())
+            }
+            (8, _, _, 0) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx = vy;
+                dbg!("set vy to vx");
+                Ok(())
+            }
+            (8, _, _, 1) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx |= vy;
+                dbg!("binary OR vy to vx");
+                Ok(())
+            }
+            (8, _, _, 2) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx &= vy;
+                dbg!("binary AND vy to vx");
+                Ok(())
+            }
+            (8, _, _, 3) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx ^= vy;
+                dbg!("binary XOR vy to vx");
+                Ok(())
+            }
+            (8, _, _, 4) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+
+                let (result, is_overflow) = vx.overflowing_add(vy);
+                *vx = result;
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = is_overflow as u8;
+                dbg!("add vy to vx with overflow flag setup");
+                Ok(())
+            }
+            (8, _, _, 5) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let (result, borrow) = vx.overflowing_sub(vy);
+                *vx = result;
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = !borrow as u8;
+                dbg!("sub vy from vx");
+                Ok(())
+            }
+            (8, _, _, 7) => {
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let (result, borrow) = vy.overflowing_sub(*vx);
+                *vx = result;
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = !borrow as u8;
+                dbg!("sub vx from vy then set vx");
+                Ok(())
+            }
+            (8, _, _, 6) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                // shift vx one bit to the right, then set vf to the one bit was shifted out
+                let shifted_out = *vx & 0x1;
+                *vx >>= 1;
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = shifted_out;
+                dbg!("shift vx one bit to the right then set vf to the one bit was shifted out");
+                Ok(())
+            }
+            (8, _, _, 0xE) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                // shift vx one bit to the left, then set vf to the one bit was shifted out
+                let shifted_out = (*vx >> 7) & 0x1;
+                *vx <<= 1;
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = shifted_out;
+                dbg!("shift vx one bit to the left then set vf to the one bit was shifted out");
+                Ok(())
+            }
+            (0xa, _, _, _) => {
+                self.i = nnn;
+                dbg!("set i to nnn");
+                Ok(())
+            }
+            (0xb, _, _, _) => {
+                let &v0 = self
+                    .registers
+                    .first()
+                    .ok_or(Chip8Error::InvalidRegister(0x0))?;
+                self.pc = nnn.wrapping_add(v0 as u16);
+                dbg!("set pc to v0 + nnn");
+                Ok(())
+            }
+            (0xc, _, _, _) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx = rand::rng().random_range(0..=255) & nn;
+                dbg!("set vx to random number and nn");
+                Ok(())
+            }
+            (0xd, _, _, _) => {
+                dbg!("draw sprite at vx, vy, n");
+                Ok(())
+            }
+            (0xe, _, 0x9, 0xe) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let &key = self
+                    .keyboard
+                    .get(vx as usize)
+                    .ok_or(Chip8Error::InvalidKey(vx))?;
+                if key != 0 {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("skip next instruction if key is pressed");
+                Ok(())
+            }
+            (0xe, _, 0xa, 0x1) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let &key = self
+                    .keyboard
+                    .get(vx as usize)
+                    .ok_or(Chip8Error::InvalidKey(vx))?;
+                if key == 0 {
+                    self.pc = self.pc.wrapping_add(2);
+                }
+                dbg!("skip next instruction if key is not pressed");
+                Ok(())
+            }
+            (0xf, _, 0x0, 0x7) => {
+                let vx = self
+                    .registers
+                    .get_mut(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                *vx = self.dt;
+                dbg!("set vx to dt");
+                Ok(())
+            }
+            (0xf, _, 0x1, 0x5) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                self.dt = vx;
+                dbg!("set dt to vx");
+                Ok(())
+            }
+            (0xf, _, 0x1, 0x8) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                self.st = vx;
+                dbg!("set st to vx");
+                Ok(())
+            }
+            (0xf, _, 0x1, 0xe) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                self.i = self.i.wrapping_add(vx as u16);
+                dbg!("add vx to i");
+                Ok(())
+            }
+            (0xf, _, 0x0, 0xa) => {
+                // wait for a keypress, store the value of the key in vx
+                dbg!("wait for a keypress, store the value of the key in vx");
+                Ok(())
+            }
+            (0xf, _, 0x2, 0x9) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                self.i = vx as u16;
+                dbg!("set i to vx");
+                Ok(())
+            }
+            (0xf, _, 0x3, 0x3) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let memory = self
+                    .memory
+                    .get_mut(self.i as usize..self.i as usize + 3)
+                    .ok_or(Chip8Error::IndexError(self.i))?;
+                memory[0] = vx / 100;
+                memory[1] = (vx % 100) / 10;
+                memory[2] = vx % 10;
+                dbg!(
+                    "convert vx to three decimal digits and store in memory at the address in the index register I"
+                );
+                Ok(())
+            }
+            (0xf, _, 0x5, 0x5) => {
+                let memory = self
+                    .memory
+                    .get_mut(self.i as usize..=self.i as usize + x)
+                    .ok_or(Chip8Error::IndexError(self.i))?;
+                for (i, register) in self.registers.iter().enumerate() {
+                    if i > x {
+                        break;
+                    }
+                    memory[i] = *register;
+                }
+                dbg!("copy registers to memory at the address in the index register I");
+                Ok(())
+            }
+            (0xf, _, 0x6, 0x5) => {
+                let memory = self
+                    .memory
+                    .get_mut(self.i as usize..=self.i as usize + x)
+                    .ok_or(Chip8Error::IndexError(self.i))?;
+                for (i, register) in self.registers.iter_mut().enumerate() {
+                    if i > x {
+                        break;
+                    }
+                    *register = memory[i];
+                }
+                dbg!("copy memory to registers at the address in the index register I");
+                Ok(())
+            }
+
+            _ => Err(Chip8Error::InvalidOpCode),
+        }
+    }
+
     /// Fetches the next instruction from memory at the current program counter (`pc`),
     /// decodes it, and advances the `pc` by two bytes.
     ///
@@ -233,11 +649,11 @@ impl Chip8 {
     ///   making it impossible to fetch a full 2-byte instruction.
     fn fetch(&mut self) -> Result<Instructions, Chip8Error> {
         if let Some(instruction_bytes) = self.memory.get(self.pc as usize..self.pc as usize + 2) {
-            self.pc += 2;
+            self.pc = self.pc.wrapping_add(2);
             let instruction = (instruction_bytes[0] as u16) << 8 | instruction_bytes[1] as u16;
             Ok(Instructions::new(instruction))
         } else {
-            Err(Chip8Error::PCError)
+            Err(Chip8Error::PCError(self.pc))
         }
     }
 
@@ -263,6 +679,32 @@ impl Chip8 {
             Ok(())
         } else {
             Err(())
+        }
+    }
+
+    fn push_stack(&mut self) -> Result<(), Chip8Error> {
+        if let Some(memory) = self.stack.get_mut(self.sp as usize) {
+            *memory = self.pc;
+            self.sp = self
+                .sp
+                .checked_add(1)
+                .ok_or(Chip8Error::SPOverflow(self.sp))?;
+        } else {
+            return Err(Chip8Error::SPError(self.sp));
+        }
+        Ok(())
+    }
+
+    fn pop_stack(&mut self) -> Result<(), Chip8Error> {
+        self.sp = self
+            .sp
+            .checked_sub(1)
+            .ok_or(Chip8Error::SPOverflow(self.sp))?;
+        if let Some(&memory) = self.stack.get(self.sp as usize) {
+            self.pc = memory;
+            Ok(())
+        } else {
+            Err(Chip8Error::SPError(self.sp))
         }
     }
 }
@@ -423,9 +865,150 @@ mod tests {
         let initial_pc = chip8.pc;
 
         let result = chip8.fetch();
-        assert!(matches!(result, Err(Chip8Error::PCError)));
+        assert!(matches!(result, Err(Chip8Error::PCError(_))));
 
         // PC should not advance on failure
         assert_eq!(chip8.pc, initial_pc);
+    }
+
+    // Helper to run a single instruction
+    fn run_instruction(chip8: &mut Chip8, instruction: u16) -> Result<(), Chip8Error> {
+        let pc = chip8.pc as usize;
+        chip8.memory[pc] = (instruction >> 8) as u8;
+        chip8.memory[pc + 1] = (instruction & 0xFF) as u8;
+        chip8.run()
+    }
+
+    #[test]
+    fn test_op_1nnn_jp() {
+        let mut chip8 = Chip8::new().unwrap();
+        run_instruction(&mut chip8, 0x1ABC).unwrap();
+        assert_eq!(chip8.pc, 0x0ABC);
+    }
+
+    #[test]
+    fn test_op_2nnn_call_and_00ee_ret() {
+        let mut chip8 = Chip8::new().unwrap();
+        let initial_pc = chip8.pc;
+
+        // CALL 0x300
+        run_instruction(&mut chip8, 0x2300).unwrap();
+        assert_eq!(chip8.pc, 0x300, "PC should jump to subroutine address");
+        assert_eq!(chip8.sp, 1, "Stack pointer should increment");
+        assert_eq!(
+            chip8.stack[0],
+            initial_pc + 2,
+            "Return address should be on stack"
+        );
+
+        // Let's test the run command for RET
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.pc = 0x300;
+        chip8.sp = 1;
+        chip8.stack[0] = 0x250;
+
+        run_instruction(&mut chip8, 0x00EE).unwrap();
+        assert_eq!(chip8.pc, 0x250);
+        assert_eq!(chip8.sp, 0);
+    }
+
+    #[test]
+    fn test_op_3xkk_se_vx_byte_skip() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[3] = 0x42;
+        let initial_pc = chip8.pc;
+        run_instruction(&mut chip8, 0x3342).unwrap();
+        assert_eq!(chip8.pc, initial_pc + 4, "PC should skip next instruction");
+    }
+
+    #[test]
+    fn test_op_3xkk_se_vx_byte_no_skip() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[3] = 0x42;
+        let initial_pc = chip8.pc;
+        run_instruction(&mut chip8, 0x3343).unwrap();
+        assert_eq!(chip8.pc, initial_pc + 2, "PC should not skip");
+    }
+
+    #[test]
+    fn test_op_6xkk_ld_vx_byte() {
+        let mut chip8 = Chip8::new().unwrap();
+        run_instruction(&mut chip8, 0x65AB).unwrap();
+        assert_eq!(chip8.registers[5], 0xAB);
+    }
+
+    #[test]
+    fn test_op_7xkk_add_vx_byte() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[5] = 10;
+        run_instruction(&mut chip8, 0x7505).unwrap();
+        assert_eq!(chip8.registers[5], 15);
+    }
+
+    #[test]
+    fn test_op_8xy4_add_vx_vy_no_carry() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[1] = 10;
+        chip8.registers[2] = 20;
+        run_instruction(&mut chip8, 0x8124).unwrap();
+        assert_eq!(chip8.registers[1], 30);
+        assert_eq!(chip8.registers[0xF], 0, "VF should be 0 for no carry");
+    }
+
+    #[test]
+    fn test_op_8xy4_add_vx_vy_with_carry() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[1] = 0xFF;
+        chip8.registers[2] = 0x01;
+        run_instruction(&mut chip8, 0x8124).unwrap();
+        assert_eq!(chip8.registers[1], 0);
+        assert_eq!(chip8.registers[0xF], 1, "VF should be 1 for carry");
+    }
+
+    #[test]
+    fn test_op_fx33_ld_b_vx() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.registers[0] = 123;
+        chip8.i = 0x300;
+        run_instruction(&mut chip8, 0xF033).unwrap();
+        assert_eq!(chip8.memory[0x300], 1);
+        assert_eq!(chip8.memory[0x301], 2);
+        assert_eq!(chip8.memory[0x302], 3);
+    }
+
+    #[test]
+    fn test_op_fx55_ld_i_vx() {
+        let mut chip8 = Chip8::new().unwrap();
+        for i in 0..=5 {
+            chip8.registers[i] = i as u8;
+        }
+        chip8.i = 0x300;
+        run_instruction(&mut chip8, 0xF555).unwrap();
+        for i in 0..=5 {
+            assert_eq!(chip8.memory[0x300 + i], i as u8);
+        }
+    }
+
+    #[test]
+    fn test_op_fx65_ld_vx_i() {
+        // This test requires implementing the Fx65 opcode first.
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.i = 0x300;
+        for i in 0..=5 {
+            chip8.memory[0x300 + i] = i as u8;
+        }
+
+        run_instruction(&mut chip8, 0xF565).unwrap();
+        for i in 0..=5 {
+            assert_eq!(chip8.registers[i], i as u8);
+        }
+    }
+
+    #[test]
+    fn test_invalid_opcode() {
+        let mut chip8 = Chip8::new().unwrap();
+        // 0x0FFF is not a valid opcode
+        let result = run_instruction(&mut chip8, 0x0FFF);
+        assert!(matches!(result, Err(Chip8Error::InvalidOpCode)));
     }
 }
