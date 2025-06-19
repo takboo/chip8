@@ -1,100 +1,9 @@
+mod instruction;
+mod consts;
+
+use instruction::Instruction;
+use consts::*;
 use rand::Rng;
-
-/// Standard CHIP-8 font set (hex digits 0-F)
-/// Each digit is 5 bytes representing an 8x5 pixel sprite
-const FONT_SET: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-    0x20, 0x60, 0x20, 0x20, 0x70, // 1
-    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-];
-
-/// Memory address where font sprites are loaded
-const FONT_START_ADDRESS: usize = 0x50;
-
-/// Memory address where rom are loaded
-const ROM_START_ADDRESS: usize = 0x200;
-
-/// Decoded representation of a single 16-bit CHIP-8 instruction.
-///
-/// This struct breaks down an opcode into its constituent parts (e.g., `instr`, `x`, `y`, `n`, `nn`, `nnn`)
-/// for easier processing during the execution phase.
-struct Instructions {
-    /// The primary 4-bit instruction identifier.
-    instr: u8,
-    /// A 4-bit value, often used as a register index.
-    x: usize,
-    /// A 4-bit value, often used as a register index.
-    y: usize,
-    /// A 4-bit value, often used for small constants.
-    n: u8,
-    /// An 8-bit value, often used for immediate values.
-    nn: u8,
-    /// A 12-bit value, typically representing a memory address.
-    nnn: u16,
-}
-
-impl Instructions {
-    /// Creates a new `Instructions` instance by decoding a 16-bit opcode.
-    fn new(instruction: u16) -> Self {
-        let instr = ((instruction & 0xF000) >> 12) as u8;
-        let x = ((instruction & 0x0F00) >> 8) as usize;
-        let y = ((instruction & 0x00F0) >> 4) as usize;
-        let n = (instruction & 0x000F) as u8;
-        let nn = (instruction & 0x00FF) as u8;
-        let nnn = instruction & 0x0FFF;
-
-        Self {
-            instr,
-            x,
-            y,
-            n,
-            nn,
-            nnn,
-        }
-    }
-
-    /// Returns the primary 4-bit instruction identifier.
-    pub fn instruction(&self) -> u8 {
-        self.instr
-    }
-
-    /// Returns the `x` component of the instruction (a 4-bit register index).
-    pub fn x(&self) -> usize {
-        self.x
-    }
-    /// Returns the `y` component of the instruction (a 4-bit register index).
-    pub fn y(&self) -> usize {
-        self.y
-    }
-
-    /// Returns the `n` component of the instruction (a 4-bit value).
-    pub fn n(&self) -> u8 {
-        self.n
-    }
-
-    /// Returns the `nn` component of the instruction (an 8-bit value).
-    pub fn nn(&self) -> u8 {
-        self.nn
-    }
-
-    /// Returns the `nnn` component of the instruction (a 12-bit address).
-    pub fn nnn(&self) -> u16 {
-        self.nnn
-    }
-}
 
 /// Represents the CHIP-8 virtual machine.
 ///
@@ -135,31 +44,43 @@ pub struct Chip8 {
 
     /// Keyboard State of the Chip8
     keyboard: [u8; 16],
+
+    /// Flag to indicate that the display has been updated
+    display_updated: bool,
 }
 
 /// Defines the possible errors that can occur during CHIP-8 emulation.
 #[derive(Debug, thiserror::Error)]
 pub enum Chip8Error {
-    /// Occurs when the font set cannot be loaded into memory because it would exceed the memory bounds.
+    /// Failed to load the font set into memory. This is an internal error that should not occur in normal operation.
     #[error("Font-set is out of bounds")]
     LoadFontSetError,
-    /// Occurs when a ROM cannot be loaded because it is too large to fit in the available memory space.
-    #[error("ROM is out of bounds")]
+    /// The provided ROM is too large to fit into the CHIP-8 memory.
+    #[error("ROM is too large to fit into the CHIP-8 memory")]
     LoadRomError,
-    /// Occurs when the program counter (`pc`) points to an invalid memory location for an instruction fetch.
+    /// The program counter points to an invalid memory address, preventing instruction fetching.
     #[error("PC points to an invalid memory: {0}")]
     PCError(u16),
+    /// An unknown or unimplemented opcode was encountered.
     #[error("Invalid opcode")]
-    InvalidOpCode,
+    InvalidOpCode(String),
+    /// The stack pointer is out of its valid bounds (0-15).
     #[error("SP {0} is out of bounds")]
     SPError(u8),
-    #[error("SP {0} is overflow")]
+    /// A stack push or pop operation failed due to overflow or underflow.
+    #[error("SP {0} is overflow or underflow")]
     SPOverflow(u8),
+    /// Occurs when an operation attempts to access a pixel outside the framebuffer's boundaries.
+    #[error("Frame buffer is out of bounds: {0}")]
+    FrameBufferOverflow(usize),
+    /// The index register (I) points to an invalid memory address.
     #[error("Index register points to an invalid memory: {0}")]
     IndexError(u16),
+    /// An instruction referenced an invalid general-purpose register (valid range: V0-VF).
     #[error("Invalid register: V{0}")]
     InvalidRegister(usize),
-    #[error("Invalid key: {0}")]
+    /// An instruction referenced an invalid keyboard key (valid range: 0-15).
+    #[error("Invalid keyboard key index: {0}")]
     InvalidKey(u8),
 }
 
@@ -187,6 +108,7 @@ impl Chip8 {
             st: 0,
             framebuffer: [0; 64 * 32],
             keyboard: [0; 16],
+            display_updated: false,
         };
         chip8.load_font_at(FONT_START_ADDRESS, &FONT_SET)?;
         Ok(chip8)
@@ -213,6 +135,7 @@ impl Chip8 {
         self.st = 0;
         self.framebuffer = [0; 64 * 32];
         self.keyboard = [0; 16];
+        self.display_updated = false;
 
         self.load_font()?;
         Ok(())
@@ -237,6 +160,69 @@ impl Chip8 {
             .map_err(|_| Chip8Error::LoadRomError)
     }
 
+    /// Returns a read-only slice of the framebuffer.
+    ///
+    /// The framebuffer represents the CHIP-8's 64x32 monochrome display.
+    /// Each byte in the slice corresponds to a pixel, with `1` representing
+    /// a pixel that is on and `0` for a pixel that is off. The data is
+    /// stored in row-major order.
+    pub fn framebuffer(&self) -> &[u8] {
+        &self.framebuffer
+    }
+
+    /// Checks if the display has been updated since the last check.
+    ///
+    /// This flag is set to `true` by instructions that modify the framebuffer,
+    /// such as `00E0` (clear screen) and `DXYN` (draw sprite). The UI layer
+    /// should check this flag each frame to determine if it needs to redraw
+    /// the screen.
+    pub fn is_display_updated(&self) -> bool {
+        self.display_updated
+    }
+
+    /// Clears the display updated flag.
+    ///
+    /// This should be called by the UI layer after it has redrawn the screen
+    /// based on the `is_display_updated` flag.
+    pub fn clear_display_updated_flag(&mut self) {
+        self.display_updated = false;
+    }
+
+    /// Simulates a key press on the CHIP-8 keypad.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_index`: The index of the key to press (0-15). Any value outside
+    ///   this range will be ignored.
+    pub fn key_press(&mut self, key_index: u8) {
+        if let Some(key) = self.keyboard.get_mut(key_index as usize) {
+            *key = 1;
+        }
+    }
+
+    /// Simulates a key release on the CHIP-8 keypad.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_index`: The index of the key to release (0-15). Any value outside
+    ///   this range will be ignored.
+    pub fn key_release(&mut self, key_index: u8) {
+        if let Some(key) = self.keyboard.get_mut(key_index as usize) {
+            *key = 0;
+        }
+    }
+
+    /// Executes a single CHIP-8 instruction cycle.
+    ///
+    /// This involves fetching the opcode from memory at the program counter,
+    /// decoding it, and executing the corresponding operation. The program
+    /// counter is advanced accordingly.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` on successful execution of the instruction.
+    /// * `Err(Chip8Error)` if an error occurs, such as fetching from an invalid
+    ///   memory address or executing an invalid opcode.
     pub fn run(&mut self) -> Result<(), Chip8Error> {
         let instruction = self.fetch()?;
         let (instr, x, y, n) = (
@@ -250,6 +236,8 @@ impl Chip8 {
 
         match (instr, x, y, n) {
             (0, 0, 0xE, 0) => {
+                self.framebuffer.iter_mut().for_each(|p| *p = 0);
+                self.display_updated = true;
                 dbg!("clear screen");
                 Ok(())
             }
@@ -506,6 +494,56 @@ impl Chip8 {
                 Ok(())
             }
             (0xd, _, _, _) => {
+                let &vx = self
+                    .registers
+                    .get(x)
+                    .ok_or(Chip8Error::InvalidRegister(x))?;
+                let &vy = self
+                    .registers
+                    .get(y)
+                    .ok_or(Chip8Error::InvalidRegister(y))?;
+
+                let x_coord = (vx % 64) as usize;
+                let y_coord = (vy % 32) as usize;
+                let height = n as usize;
+
+                let vf = self
+                    .registers
+                    .last_mut()
+                    .ok_or(Chip8Error::InvalidRegister(0xf))?;
+                *vf = 0;
+
+                for row in 0..height {
+                    let y_pos = y_coord + row;
+                    if y_pos >= 32 {
+                        break;
+                    }
+
+                    let sprite_byte = self
+                        .memory
+                        .get(self.i as usize + row)
+                        .ok_or(Chip8Error::IndexError(self.i + row as u16))?;
+
+                    for col in 0..8 {
+                        let x_pos = x_coord + col;
+                        if x_pos >= 64 {
+                            continue;
+                        }
+
+                        if (sprite_byte & (0x80 >> col)) != 0 {
+                            let pixel_index = y_pos * 64 + x_pos;
+                            let pixel = self
+                                .framebuffer
+                                .get_mut(pixel_index)
+                                .ok_or(Chip8Error::FrameBufferOverflow(pixel_index))?;
+                            if *pixel == 1 {
+                                *vf = 1; // Collision
+                            }
+                            *pixel ^= 1;
+                        }
+                    }
+                }
+                self.display_updated = true;
                 dbg!("draw sprite at vx, vy, n");
                 Ok(())
             }
@@ -577,6 +615,23 @@ impl Chip8 {
             }
             (0xf, _, 0x0, 0xa) => {
                 // wait for a keypress, store the value of the key in vx
+                let mut key_pressed = false;
+                for (i, &key) in self.keyboard.iter().enumerate() {
+                    if key != 0 {
+                        let vx = self
+                            .registers
+                            .get_mut(x)
+                            .ok_or(Chip8Error::InvalidRegister(x))?;
+                        *vx = i as u8;
+                        key_pressed = true;
+                        break;
+                    }
+                }
+
+                if !key_pressed {
+                    // Re-run this instruction
+                    self.pc = self.pc.wrapping_sub(2);
+                }
                 dbg!("wait for a keypress, store the value of the key in vx");
                 Ok(())
             }
@@ -635,7 +690,10 @@ impl Chip8 {
                 Ok(())
             }
 
-            _ => Err(Chip8Error::InvalidOpCode),
+            _ => Err(Chip8Error::InvalidOpCode(format!(
+                "Invalid opcode: {}",
+                instruction
+            ))),
         }
     }
 
@@ -647,11 +705,11 @@ impl Chip8 {
     /// * `Ok(Instructions)` containing the decoded instruction.
     /// * `Err(Chip8Error::PCError)` if the `pc` is at or near the end of memory,
     ///   making it impossible to fetch a full 2-byte instruction.
-    fn fetch(&mut self) -> Result<Instructions, Chip8Error> {
+    fn fetch(&mut self) -> Result<Instruction, Chip8Error> {
         if let Some(instruction_bytes) = self.memory.get(self.pc as usize..self.pc as usize + 2) {
             self.pc = self.pc.wrapping_add(2);
             let instruction = (instruction_bytes[0] as u16) << 8 | instruction_bytes[1] as u16;
-            Ok(Instructions::new(instruction))
+            Ok(Instruction::new(instruction))
         } else {
             Err(Chip8Error::PCError(self.pc))
         }
@@ -682,6 +740,15 @@ impl Chip8 {
         }
     }
 
+    /// Pushes the program counter (`pc`) onto the stack.
+    ///
+    /// Increments the stack pointer (`sp`) after pushing.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the push was successful.
+    /// * `Err(Chip8Error::SPOverflow)` if the stack pointer would overflow.
+    /// * `Err(Chip8Error::SPError)` if the stack pointer is out of bounds.
     fn push_stack(&mut self) -> Result<(), Chip8Error> {
         if let Some(memory) = self.stack.get_mut(self.sp as usize) {
             *memory = self.pc;
@@ -695,6 +762,15 @@ impl Chip8 {
         Ok(())
     }
 
+    /// Pops a value from the stack into the program counter (`pc`).
+    ///
+    /// Decrements the stack pointer (`sp`) before popping.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the pop was successful.
+    /// * `Err(Chip8Error::SPOverflow)` if the stack pointer would underflow.
+    /// * `Err(Chip8Error::SPError)` if the stack pointer is out of bounds.
     fn pop_stack(&mut self) -> Result<(), Chip8Error> {
         self.sp = self
             .sp
@@ -827,7 +903,7 @@ mod tests {
     #[test]
     fn test_instructions_decoding() {
         let instruction = 0xABCD;
-        let decoded = Instructions::new(instruction);
+        let decoded = Instruction::new(instruction);
         assert_eq!(decoded.instruction(), 0xA);
         assert_eq!(decoded.x(), 0xB);
         assert_eq!(decoded.y(), 0xC);
@@ -1009,6 +1085,82 @@ mod tests {
         let mut chip8 = Chip8::new().unwrap();
         // 0x0FFF is not a valid opcode
         let result = run_instruction(&mut chip8, 0x0FFF);
-        assert!(matches!(result, Err(Chip8Error::InvalidOpCode)));
+        assert!(matches!(result, Err(Chip8Error::InvalidOpCode(_))));
+    }
+
+    #[test]
+    fn test_op_00e0_cls() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.framebuffer.iter_mut().for_each(|p| *p = 1);
+        chip8.display_updated = false;
+        run_instruction(&mut chip8, 0x00E0).unwrap();
+        assert!(chip8.framebuffer.iter().all(|&p| p == 0));
+        assert!(chip8.is_display_updated());
+    }
+
+    #[test]
+    fn test_op_dxyn_drw() {
+        let mut chip8 = Chip8::new().unwrap();
+        // Load a simple 8x1 sprite (a horizontal line) into memory at 0x300
+        chip8.i = 0x300;
+        chip8.memory[0x300] = 0xFF;
+        // Set Vx and Vy to draw at (10, 5)
+        chip8.registers[1] = 10;
+        chip8.registers[2] = 5;
+
+        // Draw a sprite of height 1 from register V1, V2
+        run_instruction(&mut chip8, 0xD121).unwrap();
+
+        // Check that the pixels are set correctly
+        for i in 0..8 {
+            assert_eq!(chip8.framebuffer[5 * 64 + (10 + i)], 1);
+        }
+        // Check that VF is 0 (no collision)
+        assert_eq!(chip8.registers[0xF], 0);
+        assert!(chip8.is_display_updated());
+    }
+
+    #[test]
+    fn test_op_dxyn_drw_collision() {
+        let mut chip8 = Chip8::new().unwrap();
+        chip8.i = 0x300;
+        chip8.memory[0x300] = 0b11000000; // Sprite to draw
+        chip8.registers[1] = 10;
+        chip8.registers[2] = 5;
+
+        // Pre-set a pixel that will collide
+        chip8.framebuffer[5 * 64 + 10] = 1;
+
+        run_instruction(&mut chip8, 0xD121).unwrap();
+
+        // The first pixel was on, it should be turned off
+        assert_eq!(chip8.framebuffer[5 * 64 + 10], 0);
+        // The second pixel was off, it should be turned on
+        assert_eq!(chip8.framebuffer[5 * 64 + 11], 1);
+        // Check that VF is 1 (collision)
+        assert_eq!(chip8.registers[0xF], 1);
+    }
+
+    #[test]
+    fn test_op_fx0a_ld_vx_k_wait() {
+        let mut chip8 = Chip8::new().unwrap();
+        let initial_pc = chip8.pc;
+        // Run without a key press
+        run_instruction(&mut chip8, 0xF30A).unwrap();
+        // PC should be rewound, effectively pausing execution
+        assert_eq!(chip8.pc, initial_pc);
+    }
+
+    #[test]
+    fn test_op_fx0a_ld_vx_k_press() {
+        let mut chip8 = Chip8::new().unwrap();
+        let initial_pc = chip8.pc;
+        // Simulate key press for key 0xA
+        chip8.key_press(0xA);
+        run_instruction(&mut chip8, 0xF30A).unwrap();
+        // Register V3 should contain 0xA
+        assert_eq!(chip8.registers[3], 0xA);
+        // PC should advance normally
+        assert_eq!(chip8.pc, initial_pc + 2);
     }
 }
