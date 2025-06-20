@@ -133,6 +133,192 @@ fn test_invalid_opcode() {
     assert!(matches!(result, Err(Chip8Error::InvalidOpCode(_))));
 }
 
+#[test]
+fn test_instruction_type_flow_control() {
+    use crate::instruction::InstructionType;
+
+    // Test return from subroutine (0x00EE)
+    let instruction = Instruction::new(0x00EE);
+    assert_eq!(instruction.instruction_type(), InstructionType::FlowControl);
+
+    // Test jump to address (0x1NNN)
+    let instruction = Instruction::new(0x1234);
+    assert_eq!(instruction.instruction_type(), InstructionType::FlowControl);
+
+    // Test call subroutine (0x2NNN)
+    let instruction = Instruction::new(0x2ABC);
+    assert_eq!(instruction.instruction_type(), InstructionType::FlowControl);
+
+    // Test jump to V0 + NNN (0xBNNN)
+    let instruction = Instruction::new(0xB123);
+    assert_eq!(instruction.instruction_type(), InstructionType::FlowControl);
+}
+
+#[test]
+fn test_instruction_type_conditional_skip() {
+    use crate::instruction::InstructionType;
+
+    // Test skip if Vx == NN (0x3XNN)
+    let instruction = Instruction::new(0x3456);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+
+    // Test skip if Vx != NN (0x4XNN)
+    let instruction = Instruction::new(0x4789);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+
+    // Test skip if Vx == Vy (0x5XY0)
+    let instruction = Instruction::new(0x5AB0);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+
+    // Test skip if Vx != Vy (0x9XY0)
+    let instruction = Instruction::new(0x9CD0);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+
+    // Test skip if key pressed (0xEX9E)
+    let instruction = Instruction::new(0xE19E);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+
+    // Test skip if key not pressed (0xEXA1)
+    let instruction = Instruction::new(0xE2A1);
+    assert_eq!(
+        instruction.instruction_type(),
+        InstructionType::ConditionalSkip
+    );
+}
+
+#[test]
+fn test_instruction_type_register_op() {
+    use crate::instruction::InstructionType;
+
+    // Test set Vx = NN (0x6XNN)
+    let instruction = Instruction::new(0x6123);
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    // Test add NN to Vx (0x7XNN)
+    let instruction = Instruction::new(0x7456);
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    // Test arithmetic operations (0x8XY_)
+    let instruction = Instruction::new(0x8120); // Vx = Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8341); // Vx |= Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8562); // Vx &= Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8783); // Vx ^= Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x89A4); // Vx += Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8BC5); // Vx -= Vy
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8DE6); // Vx >>= 1
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x8F17); // Vx = Vy - Vx
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+
+    let instruction = Instruction::new(0x823E); // Vx <<= 1
+    assert_eq!(instruction.instruction_type(), InstructionType::RegisterOp);
+}
+
+#[test]
+fn test_instruction_type_memory_op() {
+    use crate::instruction::InstructionType;
+
+    // Test set I = NNN (0xANNN)
+    let instruction = Instruction::new(0xA123);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+
+    // Test I += Vx (0xFX1E)
+    let instruction = Instruction::new(0xF31E);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+
+    // Test I = sprite address for Vx (0xFX29)
+    let instruction = Instruction::new(0xF529);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+
+    // Test store BCD of Vx (0xFX33)
+    let instruction = Instruction::new(0xF733);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+
+    // Test store V0-Vx to memory (0xFX55)
+    let instruction = Instruction::new(0xF955);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+
+    // Test load V0-Vx from memory (0xFX65)
+    let instruction = Instruction::new(0xFB65);
+    assert_eq!(instruction.instruction_type(), InstructionType::MemoryOp);
+}
+
+#[test]
+fn test_instruction_type_display() {
+    use crate::instruction::InstructionType;
+
+    // Test clear screen (0x00E0)
+    let instruction = Instruction::new(0x00E0);
+    assert_eq!(instruction.instruction_type(), InstructionType::Display);
+
+    // Test draw sprite (0xDXYN)
+    let instruction = Instruction::new(0xD123);
+    assert_eq!(instruction.instruction_type(), InstructionType::Display);
+}
+
+#[test]
+fn test_instruction_type_input_output() {
+    use crate::instruction::InstructionType;
+
+    // Test wait for key press (0xFX0A)
+    let instruction = Instruction::new(0xF50A);
+    assert_eq!(instruction.instruction_type(), InstructionType::InputOutput);
+}
+
+#[test]
+fn test_instruction_type_timer() {
+    use crate::instruction::InstructionType;
+
+    // Test Vx = delay timer (0xFX07)
+    let instruction = Instruction::new(0xF307);
+    assert_eq!(instruction.instruction_type(), InstructionType::Timer);
+
+    // Test delay timer = Vx (0xFX15)
+    let instruction = Instruction::new(0xF515);
+    assert_eq!(instruction.instruction_type(), InstructionType::Timer);
+
+    // Test sound timer = Vx (0xFX18)
+    let instruction = Instruction::new(0xF718);
+    assert_eq!(instruction.instruction_type(), InstructionType::Timer);
+}
+
+#[test]
+fn test_instruction_type_random() {
+    use crate::instruction::InstructionType;
+
+    // Test Vx = random() & NN (0xCXNN)
+    let instruction = Instruction::new(0xC456);
+    assert_eq!(instruction.instruction_type(), InstructionType::Random);
+}
+
 // Helper to run a single instruction
 fn run_instruction(chip8: &mut Chip8, instruction: u16) -> Result<(), Chip8Error> {
     let pc = chip8.pc as usize;
