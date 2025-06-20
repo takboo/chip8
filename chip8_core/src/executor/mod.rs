@@ -7,10 +7,6 @@ pub mod flow_control;
 pub mod input;
 pub mod memory;
 
-pub trait InstructionExecutor {
-    fn execute(&mut self, instruction: &Instruction) -> Result<(), Chip8Error>;
-}
-
 impl Chip8 {
     /// 执行单个指令
     pub fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), Chip8Error> {
