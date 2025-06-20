@@ -20,16 +20,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if the register index is out of bounds.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chip8_core::Chip8;
-    /// let mut chip8 = Chip8::new().unwrap();
-    /// chip8.set_vx_to_nn(0, 0x42).unwrap();
-    /// // V0 is now 0x42
-    /// ```
-    pub fn set_vx_to_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
+    pub(super) fn set_vx_to_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)
@@ -51,17 +42,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if the register index is out of bounds.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chip8_core::Chip8;
-    /// let mut chip8 = Chip8::new().unwrap();
-    /// chip8.set_vx_to_nn(0, 10).unwrap();
-    /// chip8.add_nn_to_vx(0, 5).unwrap();
-    /// // V0 is now 15
-    /// ```
-    pub fn add_nn_to_vx(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
+    pub(super) fn add_nn_to_vx(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)
@@ -82,7 +63,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if either register index is out of bounds.
-    pub fn set_vx_to_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn set_vx_to_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -108,7 +89,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if either register index is out of bounds.
-    pub fn or_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn or_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -134,7 +115,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if either register index is out of bounds.
-    pub fn and_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn and_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -160,7 +141,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if either register index is out of bounds.
-    pub fn xor_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn xor_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -191,7 +172,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets VF register to 1 if carry occurs, 0 otherwise.
-    pub fn add_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn add_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -228,7 +209,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets VF register to 1 if no borrow occurs (Vx >= Vy), 0 if borrow occurs.
-    pub fn sub_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn sub_vx_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -263,7 +244,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets VF register to the value of the LSB before the shift operation.
-    pub fn shift_vx_right(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn shift_vx_right(&mut self, x: usize) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)
@@ -296,7 +277,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets VF register to 1 if no borrow occurs (Vy >= Vx), 0 if borrow occurs.
-    pub fn sub_vy_vx(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn sub_vy_vx(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vy = self
             .registers
             .get(y)
@@ -331,7 +312,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets VF register to the value of the MSB before the shift operation.
-    pub fn shift_vx_left(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn shift_vx_left(&mut self, x: usize) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)
@@ -361,12 +342,7 @@ impl Chip8 {
     /// # Errors
     ///
     /// Returns `Chip8Error::InvalidRegister` if the register index is out of bounds.
-    ///
-    /// # Examples
-    ///
-    /// Using `nn = 0x0F` will generate a random number between 0-15.
-    /// Using `nn = 0xFF` will generate a random number between 0-255.
-    pub fn set_vx_to_random_and_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
+    pub(super) fn set_vx_to_random_and_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)

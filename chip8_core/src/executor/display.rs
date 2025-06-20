@@ -32,19 +32,7 @@ impl Chip8 {
     /// - Sets VF register to 1 if any pixel collision occurs, 0 otherwise
     /// - Sets display_updated flag to true to indicate screen refresh needed
     /// - Coordinates wrap around screen boundaries (X: 0-63, Y: 0-31)
-    ///
-    /// # Examples
-    ///
-    /// Drawing a 5-byte tall sprite (like a font character) at position (10, 15):
-    /// ```
-    /// # use chip8_core::Chip8;
-    /// let mut chip8 = Chip8::new().unwrap();
-    /// chip8.set_vx_to_nn(0, 10).unwrap(); // X coordinate in V0
-    /// chip8.set_vx_to_nn(1, 15).unwrap(); // Y coordinate in V1
-    /// chip8.set_i_to_nnn(0x200).unwrap(); // Sprite data location
-    /// chip8.draw_sprite(0, 1, 5).unwrap(); // Draw 5-byte sprite
-    /// ```
-    pub fn draw_sprite(&mut self, x: usize, y: usize, n: u8) -> Result<(), Chip8Error> {
+    pub(super) fn draw_sprite(&mut self, x: usize, y: usize, n: u8) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)

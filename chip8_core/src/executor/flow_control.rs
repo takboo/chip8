@@ -20,7 +20,7 @@ impl Chip8 {
     ///
     /// - Clears all pixels in the framebuffer
     /// - Sets the display_updated flag to true
-    pub fn clear_screen(&mut self) -> Result<(), Chip8Error> {
+    pub(super) fn clear_screen(&mut self) -> Result<(), Chip8Error> {
         self.framebuffer.iter_mut().for_each(|p| *p = 0);
         self.display_updated = true;
 
@@ -41,7 +41,7 @@ impl Chip8 {
     ///
     /// - Decrements the stack pointer
     /// - Sets the program counter to the address popped from the stack
-    pub fn return_from_subroutine(&mut self) -> Result<(), Chip8Error> {
+    pub(super) fn return_from_subroutine(&mut self) -> Result<(), Chip8Error> {
         self.pop_stack()?;
 
         Ok(())
@@ -64,7 +64,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets the program counter to the specified address.
-    pub fn jump_to_address(&mut self, nnn: u16) -> Result<(), Chip8Error> {
+    pub(super) fn jump_to_address(&mut self, nnn: u16) -> Result<(), Chip8Error> {
         self.pc = nnn;
 
         Ok(())
@@ -89,7 +89,7 @@ impl Chip8 {
     /// - Pushes the current program counter onto the stack
     /// - Increments the stack pointer
     /// - Sets the program counter to the specified address
-    pub fn call_subroutine(&mut self, nnn: u16) -> Result<(), Chip8Error> {
+    pub(super) fn call_subroutine(&mut self, nnn: u16) -> Result<(), Chip8Error> {
         self.push_stack()?;
         self.pc = nnn;
 
@@ -113,7 +113,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the condition is true.
-    pub fn skip_if_vx_equals_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_vx_equals_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -142,7 +142,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the condition is true.
-    pub fn skip_if_vx_not_equals_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_vx_not_equals_nn(&mut self, x: usize, nn: u8) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -171,7 +171,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the condition is true.
-    pub fn skip_if_vx_equals_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_vx_equals_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -204,7 +204,11 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the condition is true.
-    pub fn skip_if_vx_not_equals_vy(&mut self, x: usize, y: usize) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_vx_not_equals_vy(
+        &mut self,
+        x: usize,
+        y: usize,
+    ) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -241,7 +245,7 @@ impl Chip8 {
     /// # Examples
     ///
     /// If V0 contains 0x02 and NNN is 0x300, the program will jump to address 0x302.
-    pub fn jump_to_v0_plus_nnn(&mut self, nnn: u16) -> Result<(), Chip8Error> {
+    pub(super) fn jump_to_v0_plus_nnn(&mut self, nnn: u16) -> Result<(), Chip8Error> {
         let &v0 = self
             .registers
             .first()

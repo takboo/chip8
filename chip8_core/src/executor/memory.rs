@@ -25,7 +25,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets the index register I to the specified address.
-    pub fn set_i_to_nnn(&mut self, nnn: u16) -> Result<(), Chip8Error> {
+    pub(super) fn set_i_to_nnn(&mut self, nnn: u16) -> Result<(), Chip8Error> {
         self.i = nnn;
         Ok(())
     }
@@ -46,7 +46,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Loads the current delay timer value into register Vx.
-    pub fn set_vx_to_delay_timer(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn set_vx_to_delay_timer(&mut self, x: usize) -> Result<(), Chip8Error> {
         let vx = self
             .registers
             .get_mut(x)
@@ -71,7 +71,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets the delay timer to the value in register Vx.
-    pub fn set_delay_timer_to_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn set_delay_timer_to_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -97,7 +97,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Sets the sound timer to the value in register Vx.
-    pub fn set_sound_timer_to_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn set_sound_timer_to_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -123,7 +123,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// Adds the value in register Vx to the index register I (with wrapping).
-    pub fn add_vx_to_i(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn add_vx_to_i(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -154,7 +154,7 @@ impl Chip8 {
     ///
     /// Only the lower 4 bits of Vx are used (values 0-F). Higher values will
     /// wrap around modulo 16.
-    pub fn set_i_to_font_location(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn set_i_to_font_location(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -188,10 +188,10 @@ impl Chip8 {
     /// # Examples
     ///
     /// If Vx contains 234:
-    /// - Memory[I] = 2 (hundreds)
-    /// - Memory[I+1] = 3 (tens)
-    /// - Memory[I+2] = 4 (ones)
-    pub fn store_bcd_of_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
+    /// - Memory\[I\] = 2 (hundreds)
+    /// - Memory\[I+1\] = 3 (tens)
+    /// - Memory\[I+2\] = 4 (ones)
+    pub(super) fn store_bcd_of_vx(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -206,7 +206,7 @@ impl Chip8 {
         Ok(())
     }
 
-    /// **FX55 - LD [I], Vx**: Store registers V0 through Vx in memory starting at location I.
+    /// **FX55 - LD \[I\], Vx**: Store registers V0 through Vx in memory starting at location I.
     ///
     /// This instruction copies the values from registers V0 through Vx (inclusive)
     /// into memory starting at the address stored in the index register I.
@@ -229,7 +229,7 @@ impl Chip8 {
     ///
     /// If x=3, this instruction stores V0, V1, V2, and V3 into memory locations
     /// I, I+1, I+2, and I+3 respectively.
-    pub fn store_registers_to_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn store_registers_to_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
         let memory = self
             .memory
             .get_mut(self.i as usize..=self.i as usize + x)
@@ -243,7 +243,7 @@ impl Chip8 {
         Ok(())
     }
 
-    /// **FX65 - LD Vx, [I]**: Load registers V0 through Vx from memory starting at location I.
+    /// **FX65 - LD Vx, \[I\]**: Load registers V0 through Vx from memory starting at location I.
     ///
     /// This instruction copies values from memory starting at the address stored
     /// in the index register I into registers V0 through Vx (inclusive).
@@ -266,7 +266,7 @@ impl Chip8 {
     ///
     /// If x=3, this instruction loads memory locations I, I+1, I+2, and I+3
     /// into registers V0, V1, V2, and V3 respectively.
-    pub fn load_registers_from_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn load_registers_from_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
         let memory = self
             .memory
             .get_mut(self.i as usize..=self.i as usize + x)

@@ -25,7 +25,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the specified key is pressed.
-    pub fn skip_if_key_pressed(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_key_pressed(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -59,7 +59,7 @@ impl Chip8 {
     /// # Side Effects
     ///
     /// May increment the program counter by 2 if the specified key is not pressed.
-    pub fn skip_if_key_not_pressed(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn skip_if_key_not_pressed(&mut self, x: usize) -> Result<(), Chip8Error> {
         let &vx = self
             .registers
             .get(x)
@@ -100,7 +100,7 @@ impl Chip8 {
     /// This instruction implements a blocking wait - the program will not continue
     /// until a key is actually pressed. The first key found to be pressed will be
     /// used if multiple keys are pressed simultaneously.
-    pub fn wait_for_key_press(&mut self, x: usize) -> Result<(), Chip8Error> {
+    pub(super) fn wait_for_key_press(&mut self, x: usize) -> Result<(), Chip8Error> {
         // Check all keys to find the first one that is pressed
         let mut key_pressed = false;
         for (i, &key) in self.keyboard.iter().enumerate() {
