@@ -32,7 +32,10 @@ impl Chip8 {
     ///
     /// * `Ok(())` - If the instruction was executed successfully
     /// * `Err(Chip8Error)` - If an error occurred during execution
-    pub(super) fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), Chip8Error> {
+    pub(super) fn execute_instruction(
+        &mut self,
+        instruction: &Instruction,
+    ) -> Result<(), Chip8Error> {
         match instruction.instruction_type() {
             InstructionType::FlowControl => self.execute_flow_control(instruction),
             InstructionType::ConditionalSkip => self.execute_conditional_skip(instruction),
