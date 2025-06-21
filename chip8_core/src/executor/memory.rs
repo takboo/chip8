@@ -160,7 +160,7 @@ impl Chip8 {
             .get(x)
             .ok_or(Chip8Error::InvalidRegister(x))?;
         // Each font character is 5 bytes, font starts at FONT_START_ADDRESS
-        self.i = crate::consts::FONT_START_ADDRESS as u16 + (vx as u16 * 5);
+        self.i = crate::memory::FONT_START_ADDRESS as u16 + (vx as u16 * 5);
         Ok(())
     }
 
@@ -196,13 +196,8 @@ impl Chip8 {
             .registers
             .get(x)
             .ok_or(Chip8Error::InvalidRegister(x))?;
-        let memory = self
-            .memory
-            .get_mut(self.i as usize..self.i as usize + 3)
-            .ok_or(Chip8Error::IndexError(self.i))?;
-        memory[0] = vx / 100; // Hundreds digit
-        memory[1] = (vx % 100) / 10; // Tens digit
-        memory[2] = vx % 10; // Ones digit
+        let slice: [u8; 3] = [vx / 100, (vx % 100) / 10, vx % 10];
+        self.memory.write_at(&slice, self.i as usize)?;
         Ok(())
     }
 
@@ -230,16 +225,14 @@ impl Chip8 {
     /// If x=3, this instruction stores V0, V1, V2, and V3 into memory locations
     /// I, I+1, I+2, and I+3 respectively.
     pub(super) fn store_registers_to_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
-        let memory = self
-            .memory
-            .get_mut(self.i as usize..=self.i as usize + x)
-            .ok_or(Chip8Error::IndexError(self.i))?;
-        for (i, register) in self.registers.iter().enumerate() {
-            if i > x {
-                break;
-            }
-            memory[i] = *register;
-        }
+        let buf = self
+            .registers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, v)| if i <= x { Some(*v) } else { None })
+            .collect::<Vec<u8>>();
+
+        self.memory.write_at(&buf, self.i as usize)?;
         Ok(())
     }
 
@@ -269,8 +262,9 @@ impl Chip8 {
     pub(super) fn load_registers_from_memory(&mut self, x: usize) -> Result<(), Chip8Error> {
         let memory = self
             .memory
-            .get_mut(self.i as usize..=self.i as usize + x)
+            .get(self.i as usize..=self.i as usize + x)
             .ok_or(Chip8Error::IndexError(self.i))?;
+
         for (i, register) in self.registers.iter_mut().enumerate() {
             if i > x {
                 break;
@@ -340,7 +334,7 @@ mod tests {
         chip8.registers[1] = 0xA; // Digit A
         run_instruction(&mut chip8, 0xF129).unwrap();
         // Font for digit A should be at FONT_START_ADDRESS + (0xA * 5)
-        let expected_address = FONT_START_ADDRESS as u16 + (0xA * 5);
+        let expected_address = crate::memory::FONT_START_ADDRESS as u16 + (0xA * 5);
         assert_eq!(chip8.i, expected_address);
     }
 
@@ -350,7 +344,7 @@ mod tests {
         for digit in 0..=0xF {
             chip8.registers[1] = digit;
             run_instruction(&mut chip8, 0xF129).unwrap();
-            let expected_address = FONT_START_ADDRESS as u16 + (digit as u16 * 5);
+            let expected_address = crate::memory::FONT_START_ADDRESS as u16 + (digit as u16 * 5);
             assert_eq!(chip8.i, expected_address);
             chip8.reset().unwrap();
         }
@@ -362,9 +356,9 @@ mod tests {
         chip8.registers[0] = 123;
         chip8.i = 0x300;
         run_instruction(&mut chip8, 0xF033).unwrap();
-        assert_eq!(chip8.memory[0x300], 1);
-        assert_eq!(chip8.memory[0x301], 2);
-        assert_eq!(chip8.memory[0x302], 3);
+        assert_eq!(chip8.memory.read_byte(0x300), Some(1));
+        assert_eq!(chip8.memory.read_byte(0x301), Some(2));
+        assert_eq!(chip8.memory.read_byte(0x302), Some(3));
     }
 
     #[test]
@@ -373,9 +367,9 @@ mod tests {
         chip8.registers[0] = 7;
         chip8.i = 0x300;
         run_instruction(&mut chip8, 0xF033).unwrap();
-        assert_eq!(chip8.memory[0x300], 0);
-        assert_eq!(chip8.memory[0x301], 0);
-        assert_eq!(chip8.memory[0x302], 7);
+        assert_eq!(chip8.memory.read_byte(0x300), Some(0));
+        assert_eq!(chip8.memory.read_byte(0x301), Some(0));
+        assert_eq!(chip8.memory.read_byte(0x302), Some(7));
     }
 
     #[test]
@@ -384,9 +378,9 @@ mod tests {
         chip8.registers[0] = 255;
         chip8.i = 0x300;
         run_instruction(&mut chip8, 0xF033).unwrap();
-        assert_eq!(chip8.memory[0x300], 2);
-        assert_eq!(chip8.memory[0x301], 5);
-        assert_eq!(chip8.memory[0x302], 5);
+        assert_eq!(chip8.memory.read_byte(0x300), Some(2));
+        assert_eq!(chip8.memory.read_byte(0x301), Some(5));
+        assert_eq!(chip8.memory.read_byte(0x302), Some(5));
     }
 
     #[test]
@@ -398,7 +392,7 @@ mod tests {
         chip8.i = 0x300;
         run_instruction(&mut chip8, 0xF555).unwrap();
         for i in 0..=5 {
-            assert_eq!(chip8.memory[0x300 + i], i as u8);
+            assert_eq!(chip8.memory.read_byte(0x300 + i), Some(i as u8));
         }
     }
 
@@ -413,11 +407,11 @@ mod tests {
 
         // Check stored registers
         for i in 0..=2 {
-            assert_eq!(chip8.memory[0x300 + i], i as u8 + 10);
+            assert_eq!(chip8.memory.read_byte(0x300 + i), Some(i as u8 + 10));
         }
 
         // Check that other memory locations weren't modified
-        assert_eq!(chip8.memory[0x303], 0);
+        assert_eq!(chip8.memory.read_byte(0x303), Some(0));
     }
 
     #[test]
@@ -425,7 +419,10 @@ mod tests {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
         for i in 0..=5 {
-            chip8.memory[0x300 + i] = i as u8;
+            chip8
+                .memory
+                .write_byte(0x300 + i, i as u8)
+                .expect("Failed to write to memory");
         }
 
         run_instruction(&mut chip8, 0xF565).unwrap();
@@ -463,9 +460,9 @@ mod tests {
         chip8.i = 4093; // Near end of memory
         chip8.registers[0] = 123;
         run_instruction(&mut chip8, 0xF033).unwrap();
-        assert_eq!(chip8.memory[4093], 1);
-        assert_eq!(chip8.memory[4094], 2);
-        assert_eq!(chip8.memory[4095], 3);
+        assert_eq!(chip8.memory.read_byte(4093), Some(1));
+        assert_eq!(chip8.memory.read_byte(4094), Some(2));
+        assert_eq!(chip8.memory.read_byte(4095), Some(3));
     }
 
     #[test]
@@ -475,21 +472,5 @@ mod tests {
         chip8.registers[1] = 1;
         run_instruction(&mut chip8, 0xF11E).unwrap();
         assert_eq!(chip8.i, 0); // Should wrap to 0
-    }
-
-    #[test]
-    fn test_font_loading_verification() {
-        let chip8 = Chip8::new().unwrap();
-
-        // Verify all font characters are loaded correctly
-        for i in 0..FONT_SET.len() {
-            assert_eq!(chip8.memory[FONT_START_ADDRESS + i], FONT_SET[i]);
-        }
-
-        // Verify memory before font is clear
-        assert_eq!(chip8.memory[FONT_START_ADDRESS - 1], 0);
-
-        // Verify memory after font is clear
-        assert_eq!(chip8.memory[FONT_START_ADDRESS + FONT_SET.len()], 0);
     }
 }
