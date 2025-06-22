@@ -1,3 +1,78 @@
+//! # CHIP-8 Core Library
+//!
+//! This library provides a pure CHIP-8 virtual machine implementation without any external dependencies
+//! for timing, graphics, or audio. It focuses solely on CPU instruction execution and state management.
+//!
+//! ## Key Features
+//!
+//! - Complete CHIP-8 instruction set implementation
+//! - 4KB memory with font set pre-loaded
+//! - 16 general-purpose registers (V0-VF)
+//! - 64x32 monochrome display with XOR sprite drawing
+//! - 16-key hexadecimal keypad support
+//! - Stack-based subroutine calls (16 levels deep)
+//! - Delay and sound timers
+//!
+//! ## Timer Management
+//!
+//! CHIP-8 has two 8-bit countdown timers that operate at 60Hz:
+//!
+//! - **Delay Timer (DT)**: Used for timing delays and synchronization
+//! - **Sound Timer (ST)**: Controls beep sound duration
+//!
+//! **Important**: This library does NOT handle timing automatically. You must call
+//! [`Chip8::tick_timers()`] at exactly 60Hz for proper timer behavior.
+//!
+//! ## Usage Example
+//!
+//! ```rust
+//! use chip8_core::Chip8;
+//! use std::time::{Duration, Instant};
+//!
+//! // Initialize the CHIP-8 system
+//! let mut chip8 = Chip8::new().unwrap();
+//!
+//! // Load a ROM program
+//! let rom_data = vec![0xA2, 0x2A, 0x60, 0x0C, 0x61, 0x08]; // Example ROM
+//! chip8.load_rom(&rom_data).unwrap();
+//!
+//! // Main emulation loop
+//! let mut last_timer_update = Instant::now();
+//! let timer_interval = Duration::from_nanos(16_666_667); // 60Hz
+//!
+//! loop {
+//!     // Execute one instruction
+//!     if let Err(e) = chip8.run() {
+//!         eprintln!("Execution error: {}", e);
+//!         break;
+//!     }
+//!
+//!     // Update timers at 60Hz
+//!     if last_timer_update.elapsed() >= timer_interval {
+//!         chip8.tick_timers();
+//!         last_timer_update = Instant::now();
+//!     }
+//!
+//!     // Handle display updates
+//!     if chip8.is_display_updated() {
+//!         // Render the framebuffer to screen
+//!         let pixels = chip8.framebuffer();
+//!         // ... render pixels to display ...
+//!         chip8.clear_display_updated_flag();
+//!     }
+//!
+//!     // Handle audio
+//!     if chip8.should_beep() {
+//!         // Play beep sound
+//!     } else {
+//!         // Stop beep sound
+//!     }
+//!
+//!     // Handle input
+//!     // chip8.key_press(key_index);   // When key is pressed
+//!     // chip8.key_release(key_index); // When key is released
+//! }
+//! ```
 mod consts;
 mod executor;
 mod instruction;
@@ -209,6 +284,90 @@ impl Chip8 {
         }
     }
 
+    /// Decrements both delay and sound timers by 1 if they are greater than 0.
+    ///
+    /// This function should be called at exactly 60Hz frequency to maintain proper
+    /// timing behavior that CHIP-8 programs expect. The CHIP-8 specification
+    /// defines that both timers decrement at this rate until they reach zero.
+    ///
+    /// # Timer Behavior
+    ///
+    /// - **Delay Timer (DT)**: Used by programs for timing delays and synchronization
+    /// - **Sound Timer (ST)**: Controls the duration of the beep sound
+    ///
+    /// # Usage
+    ///
+    /// This function should typically be called in your main emulation loop at
+    /// a consistent 60Hz interval (approximately every 16.67ms).
+    ///
+    /// # Note
+    ///
+    /// This function does not handle timing automatically. It is the caller's
+    /// responsibility to ensure it is called at the correct frequency for
+    /// accurate CHIP-8 timing behavior.
+    pub fn tick_timers(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+        if self.st > 0 {
+            self.st -= 1;
+        }
+    }
+
+    /// Returns true if the sound timer is greater than 0, indicating a beep should be played.
+    ///
+    /// The sound timer controls when the CHIP-8 system should produce its characteristic
+    /// beep sound. When the timer is non-zero, a continuous tone should be played.
+    /// When it reaches zero, the sound should stop.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if sound should be playing (sound timer > 0)
+    /// * `false` if sound should be silent (sound timer = 0)
+    pub fn should_beep(&self) -> bool {
+        self.st > 0
+    }
+
+    /// Returns the current value of the delay timer.
+    ///
+    /// The delay timer is an 8-bit countdown timer that decrements at 60Hz until
+    /// it reaches zero. Programs use it for timing delays, animations, and
+    /// synchronization. It can be set by the `FX15` instruction and read by
+    /// the `FX07` instruction.
+    ///
+    /// # Returns
+    ///
+    /// The current delay timer value (0-255)
+    pub fn delay_timer(&self) -> u8 {
+        self.dt
+    }
+
+    /// Returns the current value of the sound timer.
+    ///
+    /// The sound timer is an 8-bit countdown timer that decrements at 60Hz until
+    /// it reaches zero. While non-zero, the CHIP-8 system should produce a beep
+    /// sound. It can be set by the `FX18` instruction.
+    ///
+    /// # Returns
+    ///
+    /// The current sound timer value (0-255)
+    pub fn sound_timer(&self) -> u8 {
+        self.st
+    }
+
+    /// Returns true if the delay timer has reached zero (finished).
+    ///
+    /// This is a convenience method that's equivalent to `delay_timer() == 0`.
+    /// It's commonly used to check if a timed delay has completed.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the delay timer is 0 (delay finished)
+    /// * `false` if the delay timer is still counting down
+    pub fn delay_timer_finished(&self) -> bool {
+        self.dt == 0
+    }
+
     /// Executes a single CHIP-8 instruction cycle.
     ///
     /// This involves fetching the opcode from memory at the program counter,
@@ -347,6 +506,186 @@ mod tests {
         assert_eq!(chip8.st, 0);
         assert_eq!(chip8.framebuffer, [0; 64 * 32]);
         assert_eq!(chip8.keyboard, [0; 16]);
+    }
+
+    #[test]
+    fn test_timer_management() {
+        let mut chip8 = Chip8::new().unwrap();
+
+        // Initial state - both timers should be 0
+        assert_eq!(chip8.delay_timer(), 0);
+        assert_eq!(chip8.sound_timer(), 0);
+        assert!(!chip8.should_beep());
+        assert!(chip8.delay_timer_finished());
+
+        // Manually set timers to test tick functionality
+        chip8.dt = 10;
+        chip8.st = 5;
+
+        assert_eq!(chip8.delay_timer(), 10);
+        assert_eq!(chip8.sound_timer(), 5);
+        assert!(chip8.should_beep());
+        assert!(!chip8.delay_timer_finished());
+
+        // Test single tick
+        chip8.tick_timers();
+        assert_eq!(chip8.delay_timer(), 9);
+        assert_eq!(chip8.sound_timer(), 4);
+        assert!(chip8.should_beep());
+
+        // Test multiple ticks until sound timer reaches 0
+        for expected_dt in (5..9).rev() {
+            chip8.tick_timers();
+            assert_eq!(chip8.delay_timer(), expected_dt);
+        }
+
+        // At this point: dt = 5, st = 0
+        assert_eq!(chip8.delay_timer(), 5);
+        assert_eq!(chip8.sound_timer(), 0);
+        assert!(!chip8.should_beep());
+        assert!(!chip8.delay_timer_finished());
+
+        // Tick until delay timer also reaches 0
+        for _ in 0..5 {
+            chip8.tick_timers();
+        }
+
+        assert_eq!(chip8.delay_timer(), 0);
+        assert_eq!(chip8.sound_timer(), 0);
+        assert!(!chip8.should_beep());
+        assert!(chip8.delay_timer_finished());
+
+        // Ticking when timers are already 0 should not cause underflow
+        chip8.tick_timers();
+        assert_eq!(chip8.delay_timer(), 0);
+        assert_eq!(chip8.sound_timer(), 0);
+    }
+
+    #[test]
+    fn test_timer_edge_cases() {
+        let mut chip8 = Chip8::new().unwrap();
+
+        // Test timer value 1 (should go to 0 after one tick)
+        chip8.dt = 1;
+        chip8.st = 1;
+
+        assert!(!chip8.delay_timer_finished());
+        assert!(chip8.should_beep());
+
+        chip8.tick_timers();
+
+        assert!(chip8.delay_timer_finished());
+        assert!(!chip8.should_beep());
+
+        // Test maximum timer value (255)
+        chip8.dt = 255;
+        chip8.st = 255;
+
+        chip8.tick_timers();
+
+        assert_eq!(chip8.delay_timer(), 254);
+        assert_eq!(chip8.sound_timer(), 254);
+
+        // Test asymmetric timer values
+        chip8.dt = 100;
+        chip8.st = 10;
+
+        // Tick 10 times
+        for i in 1..=10 {
+            chip8.tick_timers();
+            assert_eq!(chip8.delay_timer(), 100 - i);
+            if i < 10 {
+                assert_eq!(chip8.sound_timer(), 10 - i);
+                assert!(chip8.should_beep());
+            } else {
+                assert_eq!(chip8.sound_timer(), 0);
+                assert!(!chip8.should_beep());
+            }
+        }
+    }
+
+    #[test]
+    fn test_timer_frequency_simulation() {
+        let mut chip8 = Chip8::new().unwrap();
+
+        // Simulate 1 second of operation at 60Hz
+        chip8.dt = 60; // 1 second delay
+        chip8.st = 30; // 0.5 second beep
+
+        // Simulate 60 timer ticks (1 second at 60Hz)
+        for tick in 1..=60 {
+            chip8.tick_timers();
+
+            let expected_dt = if tick <= 60 { 60 - tick } else { 0 };
+            let expected_st = if tick <= 30 { 30 - tick } else { 0 };
+
+            assert_eq!(chip8.delay_timer(), expected_dt);
+            assert_eq!(chip8.sound_timer(), expected_st);
+
+            // Sound should stop after 30 ticks (0.5 seconds)
+            if tick < 30 {
+                assert!(
+                    chip8.should_beep(),
+                    "Sound should be playing at tick {}",
+                    tick
+                );
+            } else {
+                assert!(
+                    !chip8.should_beep(),
+                    "Sound should be silent at tick {}",
+                    tick
+                );
+            }
+
+            // Delay should finish after 60 ticks (1 second)
+            if tick < 60 {
+                assert!(
+                    !chip8.delay_timer_finished(),
+                    "Delay should not be finished at tick {}",
+                    tick
+                );
+            } else {
+                assert!(
+                    chip8.delay_timer_finished(),
+                    "Delay should be finished at tick {}",
+                    tick
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_timer_integration_with_instructions() {
+        let mut chip8 = Chip8::new().unwrap();
+
+        // Test with FX15 instruction (set delay timer to Vx)
+        chip8.registers[5] = 42;
+        run_instruction(&mut chip8, 0xF515).unwrap(); // FX15: Set DT to V5
+        assert_eq!(chip8.delay_timer(), 42);
+
+        // Test with FX18 instruction (set sound timer to Vx)
+        chip8.registers[3] = 25;
+        run_instruction(&mut chip8, 0xF318).unwrap(); // FX18: Set ST to V3
+        assert_eq!(chip8.sound_timer(), 25);
+        assert!(chip8.should_beep());
+
+        // Test with FX07 instruction (load delay timer into Vx)
+        chip8.registers[7] = 0; // Clear register first
+        run_instruction(&mut chip8, 0xF707).unwrap(); // FX07: Load DT into V7
+        assert_eq!(chip8.registers[7], 42);
+
+        // Simulate some timer ticks and verify behavior
+        for _ in 0..10 {
+            chip8.tick_timers();
+        }
+
+        assert_eq!(chip8.delay_timer(), 32);
+        assert_eq!(chip8.sound_timer(), 15);
+        assert!(chip8.should_beep());
+
+        // Read the updated delay timer value
+        run_instruction(&mut chip8, 0xF207).unwrap(); // FX07: Load DT into V2
+        assert_eq!(chip8.registers[2], 32);
     }
 
     #[test]
