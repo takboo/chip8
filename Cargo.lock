@@ -27,6 +27,13 @@ name = "chip8_desktop"
 version = "0.1.0"
 
 [[package]]
+name = "chip8_driver"
+version = "0.1.0"
+dependencies = [
+ "chip8_core",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

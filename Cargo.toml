@@ -1,6 +1,3 @@
 [workspace]
 resolver = "3"
-members = [
-    "chip8_core",
-    "chip8_desktop",
-]
+members = ["chip8_core", "chip8_desktop", "chip8_driver"]
