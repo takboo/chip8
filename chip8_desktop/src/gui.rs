@@ -1,8 +1,11 @@
 use egui::{ClippedPrimitive, Context, TexturesDelta, ViewportId};
 use egui_wgpu::{Renderer, ScreenDescriptor};
+use log::info;
 use pixels::{PixelsContext, wgpu};
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
+
+use crate::UserCommand;
 
 /// Manages all state required for rendering egui over `Pixels`.
 pub(crate) struct Framework {
@@ -20,8 +23,8 @@ pub(crate) struct Framework {
 
 /// Example application state. A real application will need a lot more state than this.
 struct Gui {
-    /// Only show the egui window when true.
-    window_open: bool,
+    commands: Vec<UserCommand>,
+    error_info: Option<(String, String)>,
 }
 
 impl Framework {
@@ -143,12 +146,23 @@ impl Framework {
             self.renderer.free_texture(id);
         }
     }
+
+    pub(crate) fn drain_commands(&mut self) -> Vec<UserCommand> {
+        self.gui.commands.drain(..).collect()
+    }
+
+    pub(crate) fn show_error(&mut self, title: impl Into<String>, description: impl Into<String>) {
+        self.gui.error_info = Some((title.into(), description.into()));
+    }
 }
 
 impl Gui {
     /// Create a `Gui`.
     fn new() -> Self {
-        Self { window_open: false }
+        Self {
+            commands: Vec::new(),
+            error_info: None,
+        }
     }
 
     /// Create the UI using egui.
@@ -156,27 +170,49 @@ impl Gui {
         egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("About...").clicked() {
-                        self.window_open = true;
+                    if ui.button("Open File...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_file() {
+                            info!("open files: {:?}", path);
+                            self.commands.push(UserCommand::LoadRom(path));
+                        }
                         ui.close_menu();
                     }
                 })
             });
         });
 
-        egui::Window::new("Hello, egui!")
-            .open(&mut self.window_open)
-            .show(ctx, |ui| {
-                ui.label("This example demonstrates using egui with pixels.");
-                ui.label("Made with 💖 in San Francisco!");
+        self.show_error_dialog(ctx);
+    }
 
-                ui.separator();
+    fn show_error_dialog(&mut self, ctx: &Context) {
+        let mut clear_error = false;
 
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x /= 2.0;
-                    ui.label("Learn more about egui at");
-                    ui.hyperlink("https://docs.rs/egui");
+        if let Some((title, description)) = &self.error_info {
+            let mut is_open = true;
+            egui::Window::new(title.clone())
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut is_open)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.label(description.clone());
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Ok").clicked() {
+                                clear_error = true;
+                            }
+                        });
+                    });
                 });
-            });
+
+            if !is_open {
+                clear_error = true;
+            }
+        }
+
+        if clear_error {
+            self.error_info = None;
+        }
     }
 }

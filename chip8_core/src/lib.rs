@@ -131,7 +131,7 @@ pub struct Chip8 {
 #[derive(Debug, thiserror::Error)]
 pub enum Chip8Error {
     /// Failed to load the font set into memory. This is an internal error that should not occur in normal operation.
-    #[error("Font-set is out of bounds")]
+    #[error("Memory error: {0}")]
     MemoryError(#[from] MemoryError),
     /// The program counter points to an invalid memory address, preventing instruction fetching.
     #[error("PC points to an invalid memory: {0}")]
@@ -240,24 +240,6 @@ impl Chip8 {
     /// stored in row-major order.
     pub fn framebuffer(&self) -> &[u8] {
         &self.framebuffer
-    }
-
-    /// Returns the width of the framebuffer.
-    ///
-    /// # Returns
-    ///
-    /// The width of the framebuffer. 64 pixels.
-    pub fn framebuffer_width(&self) -> usize {
-        FRAMEBUFFER_WIDTH
-    }
-
-    /// Returns the height of the framebuffer.
-    ///
-    /// # Returns
-    ///
-    /// The height of the framebuffer. 32 pixels.
-    pub fn framebuffer_height(&self) -> usize {
-        FRAMEBUFFER_HEIGHT
     }
 
     /// Checks if the display has been updated since the last check.
@@ -771,4 +753,22 @@ mod tests {
         // PC should not advance on failure
         assert_eq!(chip8.pc, initial_pc);
     }
+}
+
+/// Returns the width of the framebuffer.
+///
+/// # Returns
+///
+/// The width of the framebuffer. 64 pixels.
+pub fn framebuffer_width() -> usize {
+    FRAMEBUFFER_WIDTH
+}
+
+/// Returns the height of the framebuffer.
+///
+/// # Returns
+///
+/// The height of the framebuffer. 32 pixels.
+pub fn framebuffer_height() -> usize {
+    FRAMEBUFFER_HEIGHT
 }

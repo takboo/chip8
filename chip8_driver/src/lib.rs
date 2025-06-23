@@ -29,6 +29,10 @@ impl Driver {
         Ok(driver)
     }
 
+    pub fn reset(&mut self) -> Result<(), chip8_core::Chip8Error> {
+        self.core.reset()
+    }
+
     pub fn set_cpu_speed(&mut self, hz: u64) {
         self.cpu_speed_hz = hz;
         if hz > 0 {
@@ -89,12 +93,12 @@ impl Driver {
     pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), chip8_core::Chip8Error> {
         self.core.load_rom(rom)
     }
+}
 
-    pub fn pixels_width(&self) -> usize {
-        self.core.framebuffer_width()
-    }
+pub fn pixels_width() -> usize {
+    chip8_core::framebuffer_width()
+}
 
-    pub fn pixels_height(&self) -> usize {
-        self.core.framebuffer_height()
-    }
+pub fn pixels_height() -> usize {
+    chip8_core::framebuffer_height()
 }
