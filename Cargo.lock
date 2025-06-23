@@ -586,7 +586,6 @@ name = "chip8_desktop"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chip8_core",
  "chip8_driver",
  "egui",
  "egui-wgpu",
@@ -606,6 +605,7 @@ name = "chip8_driver"
 version = "0.1.0"
 dependencies = [
  "chip8_core",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

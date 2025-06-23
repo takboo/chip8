@@ -2,8 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::gui::Framework;
-use chip8_core::Chip8Error;
-use chip8_driver::Driver;
+use chip8_driver::{Driver, DriverError};
 use error_iter::ErrorIter as _;
 use log::{error, info};
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -26,7 +25,7 @@ struct AppState {
 }
 
 impl AppState {
-    fn new() -> Result<Self, Chip8Error> {
+    fn new() -> Result<Self, DriverError> {
         let driver = Driver::new()?;
         Ok(Self {
             driver,
@@ -34,13 +33,13 @@ impl AppState {
         })
     }
 
-    fn load_rom(&mut self, rom: &[u8]) -> Result<(), Chip8Error> {
+    fn load_rom(&mut self, rom: &[u8]) -> Result<(), DriverError> {
         self.driver.load_rom(rom)?;
         self.rom_loaded = true;
         Ok(())
     }
 
-    fn tick(&mut self) -> Result<(), Chip8Error> {
+    fn tick(&mut self) -> Result<(), DriverError> {
         self.driver.tick()
     }
 }

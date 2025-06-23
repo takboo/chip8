@@ -4,6 +4,12 @@ use chip8_core::Chip8;
 
 const TIMER_SPEED_HZ: u64 = 60;
 
+#[derive(thiserror::Error, Debug)]
+pub enum DriverError {
+    #[error(transparent)]
+    CoreError(#[from] chip8_core::Chip8Error),
+}
+
 pub struct Driver {
     core: Chip8,
 
@@ -16,7 +22,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Result<Self, chip8_core::Chip8Error> {
+    pub fn new() -> Result<Self, DriverError> {
         let mut driver = Self {
             core: Chip8::new()?,
             cpu_speed_hz: 500, // a resonable speed, 500HZ
@@ -29,8 +35,9 @@ impl Driver {
         Ok(driver)
     }
 
-    pub fn reset(&mut self) -> Result<(), chip8_core::Chip8Error> {
-        self.core.reset()
+    pub fn reset(&mut self) -> Result<(), DriverError> {
+        self.core.reset()?;
+        Ok(())
     }
 
     pub fn set_cpu_speed(&mut self, hz: u64) {
@@ -43,7 +50,7 @@ impl Driver {
         }
     }
 
-    pub fn tick(&mut self) -> Result<(), chip8_core::Chip8Error> {
+    pub fn tick(&mut self) -> Result<(), DriverError> {
         let now = Instant::now();
 
         // --- CPU Tick ---
@@ -90,8 +97,9 @@ impl Driver {
     }
 
     // ROM Loading
-    pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), chip8_core::Chip8Error> {
-        self.core.load_rom(rom)
+    pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), DriverError> {
+        self.core.load_rom(rom)?;
+        Ok(())
     }
 }
 

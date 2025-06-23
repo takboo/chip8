@@ -19,4 +19,3 @@ error-iter = "0.4"
 winit_input_helper = "0.16.0"
 rfd = "0.15.3"
 anyhow = "1.0.98"
-chip8_core = { version = "0.1.0", path = "../chip8_core" }
