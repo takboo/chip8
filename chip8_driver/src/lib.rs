@@ -89,4 +89,12 @@ impl Driver {
     pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), chip8_core::Chip8Error> {
         self.core.load_rom(rom)
     }
+
+    pub fn pixels_width(&self) -> usize {
+        self.core.framebuffer_width()
+    }
+
+    pub fn pixels_height(&self) -> usize {
+        self.core.framebuffer_height()
+    }
 }

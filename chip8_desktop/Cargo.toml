@@ -4,3 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chip8_driver = { version = "0.1.0", path = "../chip8_driver" }
+env_logger = "0.11.8"
+log = "0.4.27"
+pixels = "0.15.0"
+rodio = "0.20.1"
+winit = "0.29.15"
+egui = "0.26"
+egui-wgpu = "0.26.0"
+egui-winit = { version = "0.26", default-features = false, features = [
+    "links",
+] }
+error-iter = "0.4"
+winit_input_helper = "0.16.0"

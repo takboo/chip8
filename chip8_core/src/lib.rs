@@ -118,7 +118,7 @@ pub struct Chip8 {
     st: u8,
 
     /// Frame Buffer of the Chip8
-    framebuffer: [u8; 64 * 32],
+    framebuffer: [u8; FRAMEBUFFER_WIDTH * FRAMEBUFFER_HEIGHT],
 
     /// Keyboard State of the Chip8
     keyboard: [u8; 16],
@@ -137,7 +137,7 @@ pub enum Chip8Error {
     #[error("PC points to an invalid memory: {0}")]
     PCError(u16),
     /// An unknown or unimplemented opcode was encountered.
-    #[error("Invalid opcode")]
+    #[error("Invalid opcode: {0}")]
     InvalidOpCode(String),
     /// The stack pointer is out of its valid bounds (0-15).
     #[error("SP {0} is out of bounds")]
@@ -240,6 +240,24 @@ impl Chip8 {
     /// stored in row-major order.
     pub fn framebuffer(&self) -> &[u8] {
         &self.framebuffer
+    }
+
+    /// Returns the width of the framebuffer.
+    ///
+    /// # Returns
+    ///
+    /// The width of the framebuffer. 64 pixels.
+    pub fn framebuffer_width(&self) -> usize {
+        FRAMEBUFFER_WIDTH
+    }
+
+    /// Returns the height of the framebuffer.
+    ///
+    /// # Returns
+    ///
+    /// The height of the framebuffer. 32 pixels.
+    pub fn framebuffer_height(&self) -> usize {
+        FRAMEBUFFER_HEIGHT
     }
 
     /// Checks if the display has been updated since the last check.
