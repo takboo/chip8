@@ -96,9 +96,10 @@ mod tests {
         let mut chip8 = Chip8::new().unwrap();
         // Load a simple 8x1 sprite (a horizontal line) into memory at 0x300
         chip8.i = 0x300;
+        let value = [0xFF];
         chip8
             .memory
-            .write_byte(0x300, 0xFF)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         // Set Vx and Vy to draw at (10, 5)
         chip8.registers[1] = 10;
@@ -120,9 +121,10 @@ mod tests {
     fn test_op_dxyn_drw_collision() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
+        let value = [0b11000000];
         chip8
             .memory
-            .write_byte(0x300, 0b11000000)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         chip8.registers[1] = 10;
         chip8.registers[2] = 5;
@@ -145,14 +147,10 @@ mod tests {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
         // Load a 2-line sprite
+        let value = [0b11110000, 0b00001111];
         chip8
             .memory
-            .write_byte(0x300, 0b11110000)
-            .expect("Failed to write memory");
-
-        chip8
-            .memory
-            .write_byte(0x301, 0b00001111)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         chip8.registers[1] = 5; // x position
         chip8.registers[2] = 3; // y position
@@ -180,9 +178,10 @@ mod tests {
     fn test_op_dxyn_drw_wrapping() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
+        let value = [0xFF];
         chip8
             .memory
-            .write_byte(0x300, 0xFF)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         // Position at edge of screen
         chip8.registers[1] = 60; // x position (screen is 64 wide)
@@ -200,13 +199,10 @@ mod tests {
     fn test_op_dxyn_drw_bottom_edge() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
+        let value = [0xFF, 0xFF];
         chip8
             .memory
-            .write_byte(0x300, 0xFF)
-            .expect("Failed to write memory");
-        chip8
-            .memory
-            .write_byte(0x301, 0xFF)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         // Position at bottom edge
         chip8.registers[1] = 0;
@@ -225,9 +221,10 @@ mod tests {
     fn test_op_dxyn_drw_coordinate_wrapping() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
+        let value = [0b10000001];
         chip8
             .memory
-            .write_byte(0x300, 0b10000001)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
 
         // Use coordinates that would wrap
@@ -245,9 +242,10 @@ mod tests {
     fn test_sprite_xor_behavior() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
+        let value = [0xFF];
         chip8
             .memory
-            .write_byte(0x300, 0xFF)
+            .write_at(&value, 0x300)
             .expect("Failed to write memory");
         chip8.registers[1] = 10;
         chip8.registers[2] = 5;

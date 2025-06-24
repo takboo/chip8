@@ -418,12 +418,11 @@ mod tests {
     fn test_op_fx65_ld_vx_i() {
         let mut chip8 = Chip8::new().unwrap();
         chip8.i = 0x300;
-        for i in 0..=5 {
-            chip8
-                .memory
-                .write_byte(0x300 + i, i as u8)
-                .expect("Failed to write to memory");
-        }
+        let value = (0..=5).collect::<Vec<u8>>();
+        chip8
+            .memory
+            .write_at(&value, 0x300)
+            .expect("Failed to write memory");
 
         run_instruction(&mut chip8, 0xF565).unwrap();
         for i in 0..=5 {

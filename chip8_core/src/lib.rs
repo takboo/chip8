@@ -453,14 +453,13 @@ mod tests {
 
     pub fn run_instruction(chip8: &mut Chip8, instruction: u16) -> Result<(), Chip8Error> {
         let pc = chip8.pc as usize;
+        let instruction: [u8; 2] = [(instruction >> 8) as u8, (instruction & 0xFF) as u8];
+
         chip8
             .memory
-            .write_byte(pc, (instruction >> 8) as u8)
+            .write_at(&instruction, pc)
             .expect("Failed to write instruction");
-        chip8
-            .memory
-            .write_byte(pc + 1, (instruction & 0xFF) as u8)
-            .expect("Failed to write instruction");
+
         chip8.run()
     }
 
@@ -480,9 +479,10 @@ mod tests {
     fn test_reset() {
         let mut chip8 = Chip8::new().unwrap();
         // Set some state to non-default values
+        let byte = [0xFF];
         chip8
             .memory
-            .write_byte(0x300, 0xFF)
+            .write_at(&byte, 0x300)
             .expect("Failed to write memory");
         chip8.registers[0] = 0xAA;
         chip8.pc = 0x300;
@@ -698,13 +698,13 @@ mod tests {
             .memory
             .get(ROM_START_ADDRESS..ROM_START_ADDRESS + rom_data.len())
             .expect("Failed to read memory at ROM address");
-        assert_eq!(memory_slice, rom_data.as_slice());
+        assert_eq!(memory_slice, &rom_data);
     }
 
     #[test]
     fn test_load_rom_out_of_bounds() {
         let mut chip8 = Chip8::new().unwrap();
-        let rom_size = chip8.memory.size() - ROM_START_ADDRESS + 1;
+        let rom_size = memory::RAM_SIZE - ROM_START_ADDRESS + 1;
         let rom_data = vec![0u8; rom_size];
 
         assert!(matches!(
@@ -717,14 +717,11 @@ mod tests {
     fn test_fetch_success() {
         let mut chip8 = Chip8::new().unwrap();
         // Load an instruction 0x1234 at the start of ROM space
+        let bytes = [0x12, 0x34];
         chip8
             .memory
-            .write_byte(ROM_START_ADDRESS, 0x12)
-            .expect("Failed to write byte");
-        chip8
-            .memory
-            .write_byte(ROM_START_ADDRESS + 1, 0x34)
-            .expect("Failed to write byte");
+            .write_at(&bytes, ROM_START_ADDRESS)
+            .expect("failed to write memory");
 
         let initial_pc = chip8.pc;
         let instructions = chip8.fetch().unwrap();
@@ -744,7 +741,7 @@ mod tests {
     fn test_fetch_out_of_bounds() {
         let mut chip8 = Chip8::new().unwrap();
         // Set PC to the last byte of memory, where a 2-byte instruction cannot be read
-        chip8.pc = (chip8.memory.size() - 1) as u16;
+        chip8.pc = (memory::RAM_SIZE - 1) as u16;
         let initial_pc = chip8.pc;
 
         let result = chip8.fetch();

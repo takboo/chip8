@@ -22,7 +22,7 @@ const FONT_SET: [u8; 80] = [
 /// Memory address where font sprites are loaded
 pub const FONT_START_ADDRESS: usize = 0x50;
 
-const RAM_SIZE: usize = 4096;
+pub(super) const RAM_SIZE: usize = 4096;
 
 /// Represents the CHIP-8's 4KB of RAM.
 ///
@@ -78,24 +78,6 @@ impl Memory {
             .map(|bytes| ((bytes[0] as u16) << 8) | bytes[1] as u16)
     }
 
-    /// Writes a single byte to a given memory address.
-    ///
-    /// # Parameters
-    ///
-    /// - `address`: The memory address to write to.
-    /// - `value`: The byte value to write.
-    ///
-    /// # Errors
-    ///
-    /// Returns `MemoryError::OutOfMemory` if the address is out of bounds.
-    pub fn write_byte(&mut self, address: usize, value: u8) -> Result<(), MemoryError> {
-        if address >= RAM_SIZE {
-            return Err(MemoryError::OutOfMemory);
-        }
-        self.ram[address] = value;
-        Ok(())
-    }
-
     /// Writes a slice of bytes to memory starting at a given offset.
     ///
     /// # Parameters
@@ -128,16 +110,6 @@ impl Memory {
     fn load_font(&mut self) -> Result<(), MemoryError> {
         self.write_at(&FONT_SET, FONT_START_ADDRESS)
     }
-
-    /// Returns the total size of the RAM, which is [RAM_SIZE].
-    pub fn size(&self) -> usize {
-        RAM_SIZE
-    }
-
-    /// Checks if a given address is within the valid memory bounds (less than [RAM_SIZE]).
-    pub fn is_valid_address(&self, address: usize) -> bool {
-        address < RAM_SIZE
-    }
 }
 
 #[cfg(test)]
@@ -159,18 +131,18 @@ mod tests {
     fn test_read_and_write_byte() {
         let mut memory = Memory::try_new().unwrap();
         let addr = 0x200;
-        let value = 0xAB;
+        let value = [0xAB];
 
         // Test successful write and read
-        assert!(memory.write_byte(addr, value).is_ok());
-        assert_eq!(memory.read_byte(addr), Some(value));
+        assert!(memory.write_at(&value, addr).is_ok());
+        assert_eq!(memory.read_byte(addr), Some(value[0]));
 
         // Test reading from an uninitialized address
         assert_eq!(memory.read_byte(addr + 1), Some(0x00));
 
         // Test writing to an out-of-bounds address
         let out_of_bounds_addr = RAM_SIZE;
-        let result = memory.write_byte(out_of_bounds_addr, value);
+        let result = memory.write_at(&value, out_of_bounds_addr);
         assert!(matches!(result, Err(MemoryError::OutOfMemory)));
 
         // Test reading from an out-of-bounds address
@@ -180,8 +152,8 @@ mod tests {
     #[test]
     fn test_read_word() {
         let mut memory = Memory::try_new().unwrap();
-        memory.write_byte(0x200, 0xAB).unwrap();
-        memory.write_byte(0x201, 0xCD).unwrap();
+        let value = [0xAB, 0xCD];
+        memory.write_at(&value, 0x200).unwrap();
         assert_eq!(memory.read_word(0x200), Some(0xABCD));
     }
 
@@ -219,20 +191,5 @@ mod tests {
         assert_eq!(memory.get(RAM_SIZE..), Some(&[] as &[u8]));
         assert_eq!(memory.get(RAM_SIZE + 1..), None);
         assert_eq!(memory.get(RAM_SIZE - 2..RAM_SIZE + 1), None);
-    }
-
-    #[test]
-    fn test_size() {
-        let memory = Memory::try_new().unwrap();
-        assert_eq!(memory.size(), RAM_SIZE);
-    }
-
-    #[test]
-    fn test_is_valid_address() {
-        let memory = Memory::try_new().unwrap();
-        assert!(memory.is_valid_address(0));
-        assert!(memory.is_valid_address(RAM_SIZE - 1));
-        assert!(!memory.is_valid_address(RAM_SIZE));
-        assert!(!memory.is_valid_address(RAM_SIZE + 1));
     }
 }
