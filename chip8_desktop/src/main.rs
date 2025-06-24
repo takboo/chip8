@@ -33,6 +33,10 @@ impl AppState {
     }
 
     fn load_rom(&mut self, rom: &[u8]) -> Result<(), DriverError> {
+        if self.rom_loaded {
+            self.driver.reset()?;
+            self.rom_loaded = false;
+        }
         self.driver.load_rom(rom)?;
         self.rom_loaded = true;
         Ok(())
@@ -83,15 +87,6 @@ fn main() -> Result<(), Error> {
         for command in framework.drain_commands() {
             match command {
                 UserCommand::LoadRom(path) => {
-                    if app.rom_loaded {
-                        if let Err(e) = app.driver.reset() {
-                            framework.show_error(
-                                "Reset Failed",
-                                format!("Could not reset driver: {}", e),
-                            );
-                        }
-                        app.rom_loaded = false;
-                    }
                     info!("begin to load rom: {:?}", path);
                     match fs::read(&path) {
                         Ok(rom) => {
@@ -144,6 +139,27 @@ fn main() -> Result<(), Error> {
                 ..
             } => {
                 elwt.exit();
+            }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(key_code),
+                                state,
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if let Some(key) = key_code_to_chip8_key(key_code) {
+                    if state == ElementState::Pressed {
+                        app.driver.key_press(key);
+                    } else {
+                        app.driver.key_release(key);
+                    }
+                }
             }
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
@@ -231,5 +247,27 @@ fn draw(driver: &Driver, frame: &mut [u8]) {
             [0x00, 0x00, 0x00, 0xFF]
         };
         pixel.copy_from_slice(&rgba);
+    }
+}
+
+fn key_code_to_chip8_key(key_code: KeyCode) -> Option<u8> {
+    match key_code {
+        KeyCode::Digit1 => Some(0x1),
+        KeyCode::Digit2 => Some(0x2),
+        KeyCode::Digit3 => Some(0x3),
+        KeyCode::Digit4 => Some(0xC),
+        KeyCode::KeyQ => Some(0x4),
+        KeyCode::KeyW => Some(0x5),
+        KeyCode::KeyE => Some(0x6),
+        KeyCode::KeyR => Some(0xD),
+        KeyCode::KeyA => Some(0x7),
+        KeyCode::KeyS => Some(0x8),
+        KeyCode::KeyD => Some(0x9),
+        KeyCode::KeyF => Some(0xE),
+        KeyCode::KeyZ => Some(0xA),
+        KeyCode::KeyX => Some(0x0),
+        KeyCode::KeyC => Some(0xB),
+        KeyCode::KeyV => Some(0xF),
+        _ => None,
     }
 }
