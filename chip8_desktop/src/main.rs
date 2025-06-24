@@ -7,11 +7,10 @@ use error_iter::ErrorIter as _;
 use log::{error, info};
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
-use winit::event::{Event, WindowEvent};
+use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::event_loop::EventLoop;
-use winit::keyboard::KeyCode;
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{Window, WindowBuilder};
 
 mod gui;
 
@@ -51,7 +50,6 @@ fn main() -> Result<(), Error> {
     let height = chip8_driver::pixels_height() as u32;
 
     let event_loop = EventLoop::new().unwrap();
-    let mut input = WinitInputHelper::new();
     let window = {
         // Create a window with a reasonable initial size.
         let size = LogicalSize::new(width as f64 * 10.0, height as f64 * 10.0);
@@ -81,104 +79,100 @@ fn main() -> Result<(), Error> {
     };
 
     let res = event_loop.run(|event, elwt| {
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(KeyCode::Escape) || input.close_requested() {
+        // Handle user commands
+        for command in framework.drain_commands() {
+            match command {
+                UserCommand::LoadRom(path) => {
+                    if app.rom_loaded {
+                        if let Err(e) = app.driver.reset() {
+                            framework.show_error(
+                                "Reset Failed",
+                                format!("Could not reset driver: {}", e),
+                            );
+                        }
+                        app.rom_loaded = false;
+                    }
+                    info!("begin to load rom: {:?}", path);
+                    match fs::read(&path) {
+                        Ok(rom) => {
+                            if let Err(e) = app.load_rom(&rom) {
+                                framework.show_error(
+                                    "ROM Load Failed",
+                                    format!("Could not load ROM from {:?}: {}", path, e),
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            framework.show_error(
+                                "ROM Read Failed",
+                                format!("Could not read ROM from {:?}: {}", path, e),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update internal state and request a redraw
+        if app.rom_loaded {
+            if let Err(err) = app.tick() {
+                log_error("driver.tick", err);
                 elwt.exit();
-                return;
             }
 
-            // Update the scale factor
-            if let Some(scale_factor) = input.scale_factor() {
+            if app.driver.is_display_updated() {
+                window.request_redraw();
+            }
+        }
+
+        match event {
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            }
+            | Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                elwt.exit();
+            }
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } => {
+                if let Err(err) =
+                    handle_redraw_requested(&app, &mut pixels, &mut framework, &window)
+                {
+                    log_error("handle_redraw_requested", err);
+                    elwt.exit();
+                }
+            }
+            Event::WindowEvent {
+                event: WindowEvent::ScaleFactorChanged { scale_factor, .. },
+                ..
+            } => {
                 framework.scale_factor(scale_factor);
+                window.request_redraw();
             }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
+            Event::WindowEvent {
+                event: WindowEvent::Resized(size),
+                ..
+            } => {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
                     log_error("pixels.resize_surface", err);
                     elwt.exit();
                     return;
                 }
                 framework.resize(size.width, size.height);
-            }
-
-            // Handle user commands
-            for command in framework.drain_commands() {
-                match command {
-                    UserCommand::LoadRom(path) => {
-                        if app.rom_loaded {
-                            if let Err(e) = app.driver.reset() {
-                                framework.show_error(
-                                    "Reset Failed",
-                                    format!("Could not reset driver: {}", e),
-                                );
-                            }
-                            app.rom_loaded = false;
-                        }
-                        info!("begin to load rom: {:?}", path);
-                        match fs::read(&path) {
-                            Ok(rom) => {
-                                if let Err(e) = app.load_rom(&rom) {
-                                    framework.show_error(
-                                        "ROM Load Failed",
-                                        format!("Could not load ROM from {:?}: {}", path, e),
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                framework.show_error(
-                                    "ROM Read Failed",
-                                    format!("Could not read ROM from {:?}: {}", path, e),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Update internal state and request a redraw
-            if app.rom_loaded {
-                if let Err(err) = app.tick() {
-                    log_error("driver.tick", err);
-                    elwt.exit();
-                }
-
-                if app.driver.is_display_updated() {
-                    window.request_redraw();
-                }
-            }
-        }
-
-        match event {
-            // Draw the current frame
-            Event::WindowEvent {
-                event: WindowEvent::RedrawRequested,
-                ..
-            } => {
-                // Draw the world
-                draw(&app.driver, pixels.frame_mut());
-
-                // Prepare egui
-                framework.prepare(&window);
-
-                // Render everything together
-                let render_result = pixels.render_with(|encoder, render_target, context| {
-                    // Render the world texture
-                    context.scaling_renderer.render(encoder, render_target);
-
-                    // Render egui
-                    framework.render(encoder, render_target, context);
-
-                    Ok(())
-                });
-
-                // Basic error handling
-                if let Err(err) = render_result {
-                    log_error("pixels.render", err);
-                    elwt.exit();
-                }
             }
             Event::WindowEvent { event, .. } => {
                 // Update egui inputs
@@ -196,6 +190,34 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     for source in err.sources().skip(1) {
         error!("  Caused by: {source}");
     }
+}
+
+fn handle_redraw_requested(
+    app: &AppState,
+    pixels: &mut Pixels,
+    framework: &mut Framework,
+    window: &Window,
+) -> Result<(), Error> {
+    // Draw the world
+    draw(&app.driver, pixels.frame_mut());
+
+    // Prepare egui
+    framework.prepare(window);
+
+    // Render everything together
+    let render_result = pixels.render_with(|encoder, render_target, context| {
+        // Render the world texture
+        context.scaling_renderer.render(encoder, render_target);
+
+        // Render egui
+        framework.render(encoder, render_target, context);
+
+        Ok(())
+    });
+
+    render_result?;
+
+    Ok(())
 }
 
 fn draw(driver: &Driver, frame: &mut [u8]) {
