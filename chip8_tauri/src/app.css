@@ -1,62 +1,188 @@
+/* CHIP-8 Emulator Unified Styles */
+
+/* Font Definitions */
+@font-face {
+    font-family: "CHIP8-Mono";
+    src:
+        local("SF Mono"), local("Monaco"), local("Inconsolata"),
+        local("Roboto Mono"), local("Source Code Pro"), local("Menlo"),
+        local("Consolas"), local("DejaVu Sans Mono"), local("Courier New");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "CHIP8-Mono";
+    src:
+        local("SF Mono Bold"), local("Monaco Bold"), local("Inconsolata Bold"),
+        local("Roboto Mono Bold"), local("Source Code Pro Bold"),
+        local("Menlo Bold"), local("Consolas Bold"),
+        local("DejaVu Sans Mono Bold"), local("Courier New Bold");
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "CHIP8-Display";
+    src:
+        local("Impact"), local("Arial Black"), local("Franklin Gothic Bold"),
+        local("Helvetica Neue Bold"), local("Arial Bold"),
+        local("Trebuchet MS Bold"), local("Verdana Bold");
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "CHIP8-Display";
+    src:
+        local("Impact"), local("Arial Black"), local("Franklin Gothic Heavy"),
+        local("Helvetica Neue Heavy"), local("Arial Black"),
+        local("Trebuchet MS Bold"), local("Verdana Bold");
+    font-weight: 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "CHIP8-Retro";
+    src:
+        local("Courier New Bold"), local("Monaco Bold"), local("Menlo Bold"),
+        local("Consolas Bold"), local("DejaVu Sans Mono Bold");
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* CSS Custom Properties */
+:root {
+    --font-mono:
+        "CHIP8-Mono", "SF Mono", Monaco, Inconsolata, "Roboto Mono",
+        "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", "Courier New",
+        monospace;
+    --font-display:
+        "CHIP8-Display", Impact, "Arial Black", "Franklin Gothic Bold",
+        "Helvetica Neue", Arial, sans-serif;
+    --font-retro:
+        "CHIP8-Retro", "Courier New", Monaco, Menlo, Consolas, monospace;
+
+    /* Color variables */
+    --primary-green: #00ff64;
+    --bg-dark: #0a0a0a;
+    --bg-gradient-start: #0a0a0a;
+    --bg-gradient-mid: #1a1a2e;
+    --bg-gradient-end: #16213e;
+}
+
 /* Reset and base styles */
 *,
 *::before,
 *::after {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 * {
-  margin: 0;
-  padding: 0;
+    margin: 0;
+    padding: 0;
 }
 
 html {
-  color-scheme: dark;
+    color-scheme: dark;
 }
 
 body {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-  color: #00ff64;
-  font-family: 'Courier New', monospace;
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-  overflow-x: hidden;
+    background: linear-gradient(
+        135deg,
+        var(--bg-gradient-start) 0%,
+        var(--bg-gradient-mid) 50%,
+        var(--bg-gradient-end) 100%
+    );
+    color: var(--primary-green);
+    font-family: var(--font-mono);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Font utility classes */
+.font-mono {
+    font-family: var(--font-mono);
+}
+
+.font-display {
+    font-family: var(--font-display);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.font-retro {
+    font-family: var(--font-retro);
+    font-weight: bold;
+}
+
+/* Font weight utilities */
+.font-normal {
+    font-weight: 400;
+}
+.font-medium {
+    font-weight: 500;
+}
+.font-bold {
+    font-weight: 700;
+}
+.font-black {
+    font-weight: 900;
+}
+
+/* Letter spacing utilities */
+.letter-tight {
+    letter-spacing: -0.025em;
+}
+.letter-normal {
+    letter-spacing: 0;
+}
+.letter-wide {
+    letter-spacing: 0.1em;
+}
+.letter-wider {
+    letter-spacing: 0.2em;
+}
+.letter-widest {
+    letter-spacing: 0.3em;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
+    width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 100, 0.3);
-  border-radius: 4px;
+    background: rgba(0, 255, 100, 0.3);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 255, 100, 0.5);
+    background: rgba(0, 255, 100, 0.5);
 }
 
 /* Selection styling */
 ::selection {
-  background: rgba(0, 255, 100, 0.3);
-  color: #ffffff;
+    background: rgba(0, 255, 100, 0.3);
+    color: #ffffff;
 }
 
 /* Focus styling */
 :focus {
-  outline: 2px solid rgba(0, 255, 100, 0.5);
-  outline-offset: 2px;
+    outline: 2px solid rgba(0, 255, 100, 0.5);
+    outline-offset: 2px;
 }
 
 /* Disable text selection for UI elements */
 button,
 .key-button,
 .status-indicator {
-  user-select: none;
-} 
+    user-select: none;
+}
