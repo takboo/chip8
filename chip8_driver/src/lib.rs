@@ -22,10 +22,10 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Result<Self, DriverError> {
+    pub fn new(cpu_speed_hz: u64) -> Result<Self, DriverError> {
         let mut driver = Self {
             core: Chip8::new()?,
-            cpu_speed_hz: 500, // a resonable speed, 500HZ
+            cpu_speed_hz,
             cpu_cycle_duration: Duration::from_secs(0),
             last_cpu_tick: Instant::now(),
             timer_cycle_duration: Duration::from_secs_f64(1.0 / TIMER_SPEED_HZ as f64),
@@ -52,18 +52,26 @@ impl Driver {
 
     pub fn tick(&mut self) -> Result<(), DriverError> {
         let now = Instant::now();
+        let cpu_duration = now.duration_since(self.last_cpu_tick);
+        let timer_duration = now.duration_since(self.last_timer_tick);
 
         // --- CPU Tick ---
         // Check if enough time has passed since the last CPU tick
-        if now.duration_since(self.last_cpu_tick) >= self.cpu_cycle_duration {
-            self.core.run()?;
+        if cpu_duration >= self.cpu_cycle_duration {
+            let cycles = cpu_duration.as_nanos() / self.cpu_cycle_duration.as_nanos();
+            for _ in 0..cycles.max(1) {
+                self.core.run()?;
+            }
             self.last_cpu_tick = now;
         }
 
         // --- Timer Tick ---
         // Check if enough time has passed since the last timer tick
-        if now.duration_since(self.last_timer_tick) >= self.timer_cycle_duration {
-            self.core.tick_timers(); // Update timers
+        if timer_duration >= self.timer_cycle_duration {
+            let cycles = timer_duration.as_nanos() / self.timer_cycle_duration.as_nanos();
+            for _ in 0..cycles.max(1) {
+                self.core.tick_timers(); // Update timers
+            }
             self.last_timer_tick = now;
         }
 

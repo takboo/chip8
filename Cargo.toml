@@ -1,3 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["chip8_core", "chip8_desktop", "chip8_driver"]
+members = [
+    "chip8_core",
+    "chip8_desktop",
+    "chip8_driver",
+    "chip8_tauri/src-tauri",
+]

@@ -39,6 +39,7 @@ Temporary Items
 /target
 
 /.idea/
+/.vscode/
 lcov.info
 /coverage/
 .aider*

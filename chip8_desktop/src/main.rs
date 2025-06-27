@@ -25,7 +25,7 @@ struct AppState {
 
 impl AppState {
     fn new() -> Result<Self, DriverError> {
-        let driver = Driver::new()?;
+        let driver = Driver::new(500)?;
         Ok(Self {
             driver,
             rom_loaded: false,
