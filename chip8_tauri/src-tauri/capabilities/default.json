@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:scope-home",
+    "fs:scope-desktop",
+    "fs:scope-download",
+    "fs:scope-document",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
+}

@@ -1,0 +1,62 @@
+/* Reset and base styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  color: #00ff64;
+  font-family: 'Courier New', monospace;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 100, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 100, 0.5);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(0, 255, 100, 0.3);
+  color: #ffffff;
+}
+
+/* Focus styling */
+:focus {
+  outline: 2px solid rgba(0, 255, 100, 0.5);
+  outline-offset: 2px;
+}
+
+/* Disable text selection for UI elements */
+button,
+.key-button,
+.status-indicator {
+  user-select: none;
+} 
